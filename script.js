@@ -33,13 +33,17 @@
  * ╠══════════════╬═══════════════════════════════════════════════╣
  * ║  v1.6.0      ║  Fórmula corrigida: dist × base / (ws × us). ║
  * ║  2025-06-06  ║  Validado com dados reais do mundo br140.     ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v1.7.0      ║  Adicionado horário de retorno das tropas     ║
+ * ║  2025-06-06  ║  (chegada + tempo de viagem). Exibido no      ║
+ * ║              ║  resultado e na tabela de ataques.            ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v1.6.0';
+  var AP_VERSION = 'v1.7.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -425,6 +429,7 @@
               '<hr class="ap-sep">' +
               '<div class="ap-ir"><span>📤 Enviar em:</span><strong id="ap-r4">—</strong></div>' +
               '<div class="ap-ir"><span>🎯 Chega em:</span><strong id="ap-r5">—</strong></div>' +
+              '<div class="ap-ir" style="border-top:1px dashed #e8d098;margin-top:4px;padding-top:6px"><span>🔙 Retorna em:</span><strong id="ap-r6" style="color:#5a7a1e">—</strong></div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -507,10 +512,12 @@
     g('ap-r1').textContent = d.toFixed(2) + ' c';
     g('ap-r2').textContent = fmtDur(tmin);
     g('ap-r3').textContent = selTroop.emoji + ' ' + selTroop.name;
+    var returnT = new Date(arriveT.getTime() + tms); /* ida + volta = 2× o tempo de viagem */
     g('ap-r4').textContent = fmtDT(sendT);
     g('ap-r5').textContent = fmtDT(arriveT);
+    g('ap-r6').textContent = fmtDT(returnT);
     resEl.classList.add('on');
-    _lastData = { d: d, tmin: tmin, sendT: sendT, arriveT: arriveT };
+    _lastData = { d: d, tmin: tmin, sendT: sendT, arriveT: arriveT, returnT: returnT };
     /* Ao recalcular por mudança de input, esconde botão salvar até novo cálculo manual */
     if (!_fromCalcBtn) {
       var bs = g('ap-btn-save'); if (bs) bs.style.display = 'none';
@@ -546,6 +553,7 @@
         '<td>' + a.troop.emoji + ' ' + a.troop.name + '</td>' +
         '<td style="font-family:monospace;font-size:10px">' + a.sendTime.toLocaleString('pt-BR') + '</td>' +
         '<td style="font-family:monospace;font-size:10px">' + a.arriveTime.toLocaleString('pt-BR') + '</td>' +
+        '<td style="font-family:monospace;font-size:10px;color:#3a6010">' + (a.returnTime ? new Date(a.returnTime).toLocaleString('pt-BR') : '—') + '</td>' +
         '<td style="font-family:monospace">' + fmtDur(a.travelMin) + '</td>' +
         '<td>' + badge + '</td>' +
         '<td style="color:#6b4c10;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(a.notes || '—') + '</td>' +
@@ -555,7 +563,7 @@
 
     tbl.innerHTML = '<div class="ap-tw"><table class="ap-t">' +
       '<thead><tr><th>#</th><th>Origem</th><th>Destino</th><th>Tropa</th>' +
-      '<th>Envio</th><th>Chegada</th><th>Duração</th><th>Status</th><th>Obs.</th><th></th></tr></thead>' +
+      '<th>Envio</th><th>Chegada</th><th>Retorno</th><th>Duração</th><th>Status</th><th>Obs.</th><th></th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div>';
   }
 
@@ -632,7 +640,7 @@
       attacks.push({
         id: Date.now(), origin: origin, dest: dest, troop: selTroop,
         distance: _lastData.d, travelMin: _lastData.tmin,
-        sendTime: _lastData.sendT, arriveTime: _lastData.arriveT,
+        sendTime: _lastData.sendT, arriveTime: _lastData.arriveT, returnTime: _lastData.returnT,
         notes: g('ap-notes').value, createdAt: new Date()
       });
       persist(); renderTable(); this.tab('list');
@@ -657,10 +665,11 @@
     },
     csv: function () {
       if (!attacks.length) { alert('Nenhum ataque para exportar.'); return; }
-      var hdr  = 'Origem\tDestino\tTropa\tDistância\tDuração\tEnvio\tChegada\tObs.';
+      var hdr  = 'Origem\tDestino\tTropa\tDistância\tDuração\tEnvio\tChegada\tRetorno\tObs.';
       var rows = attacks.map(function (a) {
         return [a.origin, a.dest, a.troop.name, a.distance.toFixed(2), fmtDur(a.travelMin),
-                a.sendTime.toLocaleString('pt-BR'), a.arriveTime.toLocaleString('pt-BR'), a.notes || ''].join('\t');
+                a.sendTime.toLocaleString('pt-BR'), a.arriveTime.toLocaleString('pt-BR'),
+                a.returnTime ? new Date(a.returnTime).toLocaleString('pt-BR') : '—', a.notes || ''].join('\t');
       });
       var blob = new Blob([[hdr].concat(rows).join('\n')], { type: 'text/tab-separated-values' });
       var url  = URL.createObjectURL(blob);
