@@ -41,13 +41,17 @@
  * ║  v1.8.0      ║  Ícones reais das tropas carregados do        ║
  * ║  2025-06-06  ║  próprio servidor do TW. Fallback para emoji  ║
  * ║              ║  caso a imagem não carregue.                  ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v1.9.0      ║  Copiar/Colar JSON para portabilidade.        ║
+ * ║  2025-06-06  ║  Status expandido: alerta <10min (pisca),     ║
+ * ║              ║  em rota, chegou, retornou. Cor por linha.    ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v1.8.0';
+  var AP_VERSION = 'v1.9.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -342,7 +346,20 @@
     'table.ap-t td{padding:7px 8px;border-bottom:1px solid #e8d098;vertical-align:middle}',
     'table.ap-t tr:hover td{background:#fff8e0}table.ap-t tr:last-child td{border-bottom:none}',
     '.bdg{display:inline-block;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;font-family:Verdana,sans-serif}',
-    '.bdg-w{background:#ffe0e0;color:#6a1010}.bdg-r{background:#fff3cc;color:#6a4008}.bdg-d{background:#e0f0d0;color:#2a5a10}',
+    '.bdg{display:inline-block;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;font-family:Verdana,sans-serif}',
+    '.bdg-w{background:#ffe0e0;color:#6a1010}',
+    '.bdg-alert{background:#8b2020;color:#fff8e0;animation:ap-pulse 1s infinite}',
+    '.bdg-sent{background:#5a7a1e;color:#e8f8a0}',
+    '.bdg-r{background:#fff3cc;color:#6a4008}',
+    '.bdg-ret{background:#3a5a8a;color:#c8e0ff}',
+    '.bdg-d{background:#e0f0d0;color:#2a5a10}',
+    '@keyframes ap-pulse{0%,100%{opacity:1}50%{opacity:.5}}',
+    'tr.ap-row-alert td{background:#fff0f0 !important}',
+    'tr.ap-row-sent td{background:#f0fff0 !important}',
+    'tr.ap-row-returned td{background:#e8e8f8 !important;color:#888}',
+    '.ap-json-box{width:100%;height:80px;font-family:monospace;font-size:10px;border:1px solid #b8901a;border-radius:3px;background:#fffdf0;padding:6px;resize:vertical}',
+    '.ap-json-panel{display:none;background:#fff8e0;border:1px solid #d4941e;border-radius:3px;padding:10px;margin-bottom:10px}',
+    '.ap-json-panel.on{display:block}',
     '.ap-empty{text-align:center;padding:30px;color:#8b6914}',
     '.ap-loading{text-align:center;padding:20px;color:#8b6914;font-size:13px}',
   ].join('');
@@ -489,8 +506,18 @@
           '<span class="ap-cnt" id="ap-total">0 ataques</span>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
             '<button class="btn-sec" onclick="AP.sort()">⬆ Ordenar por envio</button>' +
-            '<button class="btn-sec" onclick="AP.csv()">⬇ Exportar CSV</button>' +
+            '<button class="btn-sec" onclick="AP.toggleJson()">📋 Copiar / Colar JSON</button>' +
             '<button class="btn-del" onclick="AP.clearAll()">🗑 Limpar tudo</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="ap-json-panel" id="ap-json-panel">' +
+          '<div style="font-size:10px;font-weight:700;color:#6b4c10;margin-bottom:6px">📤 Copiar — selecione e copie o JSON abaixo:</div>' +
+          '<textarea class="ap-json-box" id="ap-json-out" readonly onclick="this.select()"></textarea>' +
+          '<div style="font-size:10px;font-weight:700;color:#6b4c10;margin:8px 0 4px">📥 Colar — cole um JSON exportado para importar ataques:</div>' +
+          '<textarea class="ap-json-box" id="ap-json-in" placeholder="Cole o JSON aqui e clique em Importar..."></textarea>' +
+          '<div style="display:flex;gap:6px;margin-top:6px">' +
+            '<button class="btn-sec" onclick="AP.importJson()">✅ Importar JSON</button>' +
+            '<button class="btn-sec" onclick="AP.clearJson()">✖ Fechar</button>' +
           '</div>' +
         '</div>' +
         '<div id="ap-tbl"></div>' +
@@ -576,11 +603,28 @@
 
     var now  = new Date();
     var rows = attacks.map(function (a, i) {
-      var badge;
-      if (a.arriveTime < now)    badge = '<span class="bdg bdg-d">✔ Chegou</span>';
-      else if (a.sendTime < now) badge = '<span class="bdg bdg-r">✈ Em rota</span>';
-      else { var rem = (a.sendTime - now) / 60000; badge = '<span class="bdg bdg-w">⏳ em ' + fmtDur(rem) + '</span>'; }
-      return '<tr>' +
+      var badge, rowClass = '';
+      var returnT = a.returnTime ? new Date(a.returnTime) : null;
+      var remSend = (a.sendTime - now) / 60000;
+      if (returnT && returnT < now) {
+        /* Já deveria ter retornado */
+        badge = '<span class="bdg bdg-ret">🏠 Retornou</span>';
+        rowClass = 'ap-row-returned';
+      } else if (a.arriveTime < now) {
+        /* Chegou no alvo, aguardando retorno */
+        badge = '<span class="bdg bdg-d">⚔ Chegou</span>';
+      } else if (a.sendTime < now) {
+        /* Já saiu / deveria ter saído */
+        badge = '<span class="bdg bdg-sent">✈ Em rota</span>';
+        rowClass = 'ap-row-sent';
+      } else if (remSend <= 10) {
+        /* Menos de 10 min para enviar — alerta piscando */
+        badge = '<span class="bdg bdg-alert">🚨 ' + fmtDur(remSend) + '</span>';
+        rowClass = 'ap-row-alert';
+      } else {
+        badge = '<span class="bdg bdg-w">⏳ em ' + fmtDur(remSend) + '</span>';
+      }
+      return '<tr class="' + rowClass + '">' +
         '<td style="color:#8b6914;font-weight:700">#' + pad(i + 1) + '</td>' +
         '<td style="font-weight:700">' + esc(a.origin) + '</td>' +
         '<td style="color:#8b2020;font-weight:700">' + esc(a.dest) + '</td>' +
@@ -697,6 +741,46 @@
     clearAll: function () {
       if (!attacks.length) return;
       if (confirm('Remover todos os ' + attacks.length + ' ataques planejados?')) { attacks = []; persist(); renderTable(); }
+    },
+    toggleJson: function () {
+      var panel = g('ap-json-panel');
+      if (!panel) return;
+      var open = panel.classList.toggle('on');
+      if (open) {
+        /* Preenche textarea de exportação */
+        var out = g('ap-json-out');
+        if (out) out.value = JSON.stringify(attacks, null, 2);
+      }
+    },
+    importJson: function () {
+      var raw = (g('ap-json-in') && g('ap-json-in').value.trim()) || '';
+      if (!raw) { alert('Cole um JSON válido antes de importar.'); return; }
+      try {
+        var imported = JSON.parse(raw);
+        if (!Array.isArray(imported)) throw new Error('Não é um array');
+        var parsed = imported.map(function(a) {
+          return Object.assign({}, a, {
+            sendTime:   new Date(a.sendTime),
+            arriveTime: new Date(a.arriveTime),
+            returnTime: a.returnTime ? new Date(a.returnTime) : null,
+            createdAt:  new Date(a.createdAt)
+          });
+        });
+        /* Mescla com ataques existentes, evitando duplicatas por id */
+        var existingIds = attacks.map(function(a){ return a.id; });
+        var news = parsed.filter(function(a){ return existingIds.indexOf(a.id) === -1; });
+        attacks = attacks.concat(news);
+        persist();
+        g('ap-json-in').value = '';
+        g('ap-json-panel').classList.remove('on');
+        renderTable();
+        alert('✅ ' + news.length + ' ataque(s) importado(s) com sucesso!');
+      } catch(e) { alert('❌ JSON inválido: ' + e.message); }
+    },
+    clearJson: function () {
+      var panel = g('ap-json-panel');
+      if (panel) panel.classList.remove('on');
+      var inp = g('ap-json-in'); if (inp) inp.value = '';
     },
     csv: function () {
       if (!attacks.length) { alert('Nenhum ataque para exportar.'); return; }
