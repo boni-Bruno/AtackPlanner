@@ -23,6 +23,10 @@
  * ║  v1.3.0      ║  Changelog no cabeçalho. Seção redundante     ║
  * ║  2025-06-06  ║  de config removida; ícone ✏️ no cabeçalho    ║
  * ║              ║  permite editar velocidades inline.           ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v1.4.0      ║  Campo X aceita colar coordenada completa     ║
+ * ║  2025-06-06  ║  no formato 490|834 — X e Y preenchidos       ║
+ * ║              ║  automaticamente, ignorando o |.              ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
@@ -150,6 +154,41 @@
   function eucl(ox, oy, dx, dy) { return Math.sqrt(Math.pow(dx - ox, 2) + Math.pow(dy - oy, 2)); }
   function esc(s) { return String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function g(id)  { return document.getElementById(id); }
+
+  /* ══════════════════════════════════════════════════════
+     PARSE DE COORDENADAS — suporta "490|834" colado em qualquer campo X
+  ══════════════════════════════════════════════════════ */
+  function parseCoordPaste(prefix, raw) {
+    var m = raw.match(/(\d{1,3})\|(\d{1,3})/);
+    if (m) {
+      g(prefix + '-x').value = m[1];
+      g(prefix + '-y').value = m[2];
+      recalc();
+      return true;
+    }
+    return false;
+  }
+
+  function bindCoordPaste(prefix) {
+    ['x', 'y'].forEach(function (axis) {
+      var el = g(prefix + '-' + axis);
+      if (!el) return;
+      el.addEventListener('paste', function (e) {
+        var raw = (e.clipboardData || window.clipboardData).getData('text');
+        if (raw.indexOf('|') !== -1) {
+          e.preventDefault();
+          parseCoordPaste(prefix, raw);
+        }
+      });
+      el.addEventListener('input', function () {
+        var val = el.value;
+        if (val.indexOf('|') !== -1) {
+          el.value = '';
+          parseCoordPaste(prefix, val);
+        }
+      });
+    });
+  }
 
   /* ══════════════════════════════════════════════════════
      SELEÇÃO POR CLIQUE NO MAPA
@@ -327,8 +366,8 @@
               '<label class="ap-lbl">Aldeia de Origem</label>' +
               '<input type="text" class="ap-inp" id="ap-o-name" placeholder="Nome" value="' + esc(CURRENT.name || '') + '">' +
               '<div class="ap-row">' +
-                '<input type="number" class="ap-inp" id="ap-o-x" placeholder="X" min="0" max="999" style="width:62px;flex:none" value="' + (CURRENT.x || '') + '">' +
-                '<input type="number" class="ap-inp" id="ap-o-y" placeholder="Y" min="0" max="999" style="width:62px;flex:none" value="' + (CURRENT.y || '') + '">' +
+                '<input type="text" class="ap-inp" id="ap-o-x" placeholder="X ou 490|834" style="width:110px;flex:none" value="' + (CURRENT.x || '') + '' title="Cole X, Y ou coordenada no formato 490|834">' +
+                '<input type="text" class="ap-inp" id="ap-o-y" placeholder="Y" style="width:62px;flex:none" value="' + (CURRENT.y || '') + '">' +
                 '<button class="btn-map" id="ap-bmo" onclick="AP.pick(\'origin\')">🗺 Mapa</button>' +
                 '<button class="btn-cur" onclick="AP.cur()">📍 Atual</button>' +
               '</div>' +
@@ -337,8 +376,8 @@
               '<label class="ap-lbl">Aldeia de Destino</label>' +
               '<input type="text" class="ap-inp" id="ap-d-name" placeholder="Nome">' +
               '<div class="ap-row">' +
-                '<input type="number" class="ap-inp" id="ap-d-x" placeholder="X" min="0" max="999" style="width:62px;flex:none">' +
-                '<input type="number" class="ap-inp" id="ap-d-y" placeholder="Y" min="0" max="999" style="width:62px;flex:none">' +
+                '<input type="text" class="ap-inp" id="ap-d-x" placeholder="X ou 490|834" style="width:110px;flex:none" title="Cole X, Y ou coordenada no formato 490|834">' +
+                '<input type="text" class="ap-inp" id="ap-d-y" placeholder="Y" style="width:62px;flex:none">' +
                 '<button class="btn-map" id="ap-bmd" onclick="AP.pick(\'dest\')">🗺 Mapa</button>' +
               '</div>' +
             '</div>' +
@@ -425,10 +464,10 @@
      RECALCULAR
   ══════════════════════════════════════════════════════ */
   function recalc() {
-    var ox = parseFloat(g('ap-o-x').value);
-    var oy = parseFloat(g('ap-o-y').value);
-    var dx = parseFloat(g('ap-d-x').value);
-    var dy = parseFloat(g('ap-d-y').value);
+    var ox = parseFloat((g('ap-o-x').value || '').replace(/[^\d.]/g, ''));
+    var oy = parseFloat((g('ap-o-y').value || '').replace(/[^\d.]/g, ''));
+    var dx = parseFloat((g('ap-d-x').value || '').replace(/[^\d.]/g, ''));
+    var dy = parseFloat((g('ap-d-y').value || '').replace(/[^\d.]/g, ''));
     var distEl = g('ap-dist'), resEl = g('ap-res');
 
     if (isNaN(ox) || isNaN(oy) || isNaN(dx) || isNaN(dy)) {
@@ -637,6 +676,10 @@
       var el = g(id);
       if (el) { el.addEventListener('input', recalc); el.addEventListener('change', recalc); }
     });
+
+    /* Paste de coordenadas no formato 490|834 */
+    bindCoordPaste('ap-o');
+    bindCoordPaste('ap-d');
 
     /* Atualiza status a cada 30s */
     setInterval(function () {
