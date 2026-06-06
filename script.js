@@ -37,13 +37,17 @@
  * ║  v1.7.0      ║  Adicionado horário de retorno das tropas     ║
  * ║  2025-06-06  ║  (chegada + tempo de viagem). Exibido no      ║
  * ║              ║  resultado e na tabela de ataques.            ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v1.8.0      ║  Ícones reais das tropas carregados do        ║
+ * ║  2025-06-06  ║  próprio servidor do TW. Fallback para emoji  ║
+ * ║              ║  caso a imagem não carregue.                  ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v1.7.0';
+  var AP_VERSION = 'v1.8.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -86,6 +90,29 @@
   var UNITS_ENABLED = Array.isArray(GD.units) ? GD.units : [];
 
   STORE_KEY = 'tw_ap_' + (WORLD_ID || 'default');
+
+  /* ══════════════════════════════════════════════════════
+     ÍCONES DAS TROPAS — detecta base URL direto do DOM do jogo
+  ══════════════════════════════════════════════════════ */
+  function detectIconBase() {
+    /* Tenta extrair o base path dos ícones já carregados na página do TW */
+    var img = document.querySelector('img[src*="unit_"][src*="graphic"]');
+    if (img) {
+      var src = img.src;
+      /* Extrai tudo até "graphic/" e concatena o padrão de ícone de tropa */
+      var base = src.replace(/graphic\/.*$/, 'graphic/unit/unit_');
+      return base;
+    }
+    /* Fallback: tenta via game_data.graphic_path se disponível */
+    try {
+      var gp = window.game_data && window.game_data.graphic_path;
+      if (gp) return gp + 'unit/unit_';
+    } catch(e) {}
+    /* Fallback final: CDN padrão do TW BR */
+    return 'https://dsbr.innogamescdn.com/asset/graphic/unit/unit_';
+  }
+
+  var ICON_BASE = detectIconBase();
 
   /* ══════════════════════════════════════════════════════
      TABELA DE TROPAS — velocidade base (min/campo, mundo 1×/1×)
@@ -277,7 +304,11 @@
     '.ap-tgrd{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}',
     '.ap-trp{border:1px solid #c8a84b;border-radius:3px;padding:6px 4px;text-align:center;cursor:pointer;background:#fffbe6;transition:all .15s}',
     '.ap-trp:hover{border-color:#d4941e;background:#fff3cc}.ap-trp.on{border:2px solid #8b2020;background:#ffe0c0}',
-    '.ap-trp .e{font-size:17px;display:block}.ap-trp .n{font-size:9px;color:#6b4c10;display:block;margin-top:2px}.ap-trp .s{font-size:9px;color:#8b2020;font-weight:700}',
+    '.ap-trp .e{display:block;width:32px;height:32px;margin:0 auto}',
+    '.ap-trp .e img{width:32px;height:32px;image-rendering:pixelated}',
+    '.ap-trp .e.emoji-fb{font-size:17px;line-height:32px}',
+    '.ap-trp .n{font-size:9px;color:#6b4c10;display:block;margin-top:3px}',
+    '.ap-trp .s{font-size:9px;color:#8b2020;font-weight:700}',
     '.ap-tgl{display:flex;border:1px solid #b8901a;border-radius:3px;overflow:hidden;margin-bottom:10px}',
     '.ap-tgl-btn{flex:1;padding:7px;background:#fffbe6;border:none;font-size:11px;font-family:Verdana,sans-serif;cursor:pointer;color:#6b4c10;font-weight:700;transition:all .15s}',
     '.ap-tgl-btn.on{background:#8b2020;color:#fff8e0}',
@@ -324,9 +355,12 @@
     var nowTime = new Date().toTimeString().slice(0, 8);
 
     var troopCards = TROOPS.map(function (t) {
-      var tmin = calcTroopTime(1, t.speed); /* tempo para 1 campo no mundo atual */
+      var tmin = calcTroopTime(1, t.speed);
+      var iconUrl = ICON_BASE + t.id + '.png';
+      var iconHtml = '<span class="e"><img src="' + iconUrl + '" alt="' + t.name +
+        '" onerror="this.parentNode.className=\'e emoji-fb\';this.parentNode.innerHTML=\'' + t.emoji + '\'"></span>';
       return '<div class="ap-trp" id="ap-trp-' + t.id + '" onclick="AP.troop(\'' + t.id + '\')" title="' + t.name + '">' +
-        '<span class="e">' + t.emoji + '</span>' +
+        iconHtml +
         '<span class="n">' + t.name + '</span>' +
         '<span class="s">' + fmtDur(tmin) + '/c</span>' +
         '</div>';
@@ -550,7 +584,8 @@
         '<td style="color:#8b6914;font-weight:700">#' + pad(i + 1) + '</td>' +
         '<td style="font-weight:700">' + esc(a.origin) + '</td>' +
         '<td style="color:#8b2020;font-weight:700">' + esc(a.dest) + '</td>' +
-        '<td>' + a.troop.emoji + ' ' + a.troop.name + '</td>' +
+        '<td><img src="' + ICON_BASE + a.troop.id + '.png" style="width:18px;height:18px;vertical-align:middle;image-rendering:pixelated" ' +
+          'onerror="this.style.display=\'none\'" alt=""> ' + a.troop.name + '</td>' +
         '<td style="font-family:monospace;font-size:10px">' + a.sendTime.toLocaleString('pt-BR') + '</td>' +
         '<td style="font-family:monospace;font-size:10px">' + a.arriveTime.toLocaleString('pt-BR') + '</td>' +
         '<td style="font-family:monospace;font-size:10px;color:#3a6010">' + (a.returnTime ? new Date(a.returnTime).toLocaleString('pt-BR') : '—') + '</td>' +
