@@ -49,13 +49,17 @@
  * ║  v2.0.0      ║  Botão copiar JSON; badge de contagem sempre  ║
  * ║  2025-06-06  ║  visível; tabela responsiva sem scroll lateral;║
  * ║              ║  ataques sempre ordenados por horário envio.  ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v2.1.0      ║  Exportação BB-code para fórum TW com seleção ║
+ * ║  2025-06-06  ║  individual de ataques; [coord], [unit] e     ║
+ * ║              ║  botão copiar. Inclui coluna Obs.             ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v2.0.0';
+  var AP_VERSION = 'v2.1.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -377,6 +381,13 @@
     '.ap-json-box{width:100%;height:80px;font-family:monospace;font-size:10px;border:1px solid #b8901a;border-radius:3px;background:#fffdf0;padding:6px;resize:vertical}',
     '.ap-json-panel{display:none;background:#fff8e0;border:1px solid #d4941e;border-radius:3px;padding:10px;margin-bottom:10px}',
     '.ap-json-panel.on{display:block}',
+    '.ap-bb-panel{display:none;background:#fffbe6;border:1px solid #c8a84b;border-radius:3px;padding:10px;margin-bottom:10px}',
+    '.ap-bb-panel.on{display:block}',
+    '.ap-sel-bar{background:#e8d098;border:1px solid #c8a84b;border-radius:3px;padding:6px 10px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px}',
+    '.ap-sel-bar label{display:flex;align-items:center;gap:4px;cursor:pointer;color:#5a3a00;font-weight:700}',
+    '.ap-chk{width:14px;height:14px;cursor:pointer;accent-color:#8b2020}',
+    'tr.ap-row-selected td{background:#fff3cc !important}',
+    '.col-chk{width:24px;text-align:center}',
     '.ap-empty{text-align:center;padding:30px;color:#8b6914}',
     '.ap-loading{text-align:center;padding:20px;color:#8b6914;font-size:13px}',
   ].join('');
@@ -523,7 +534,8 @@
           '<span class="ap-cnt" id="ap-total">0 ataques</span>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
             '<button class="btn-sec" onclick="AP.sort()">⬆ Ordenar por envio</button>' +
-            '<button class="btn-sec" onclick="AP.toggleJson()">📋 Copiar / Colar JSON</button>' +
+            '<button class="btn-sec" onclick="AP.toggleJson()">📋 JSON</button>' +
+            '<button class="btn-sec" onclick="AP.toggleBB()">📜 BB-code</button>' +
             '<button class="btn-del" onclick="AP.clearAll()">🗑 Limpar tudo</button>' +
           '</div>' +
         '</div>' +
@@ -538,6 +550,24 @@
           '<div style="display:flex;gap:6px;margin-top:6px">' +
             '<button class="btn-sec" onclick="AP.importJson()">✅ Importar JSON</button>' +
             '<button class="btn-sec" onclick="AP.clearJson()">✖ Fechar</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="ap-bb-panel" id="ap-bb-panel">' +
+          '<div class="ap-sel-bar">' +
+            '<label><input type="checkbox" class="ap-chk" id="ap-bb-selall" onclick="AP.bbSelAll(this.checked)"> Selecionar todos</label>' +
+            '<span style="color:#8b6914">Marque os ataques que deseja exportar</span>' +
+            '<button class="btn-sec" style="margin-left:auto;font-size:10px;padding:3px 10px" onclick="AP.genBB()">📜 Gerar BB-code</button>' +
+          '</div>' +
+          '<div id="ap-bb-sel-tbl"></div>' +
+          '<div id="ap-bb-out-wrap" style="display:none;margin-top:10px">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+              '<span style="font-size:10px;font-weight:700;color:#6b4c10">📜 BB-code gerado — copie e cole no fórum do TW:</span>' +
+              '<button class="btn-sec" style="font-size:10px;padding:3px 10px" onclick="AP.copyBB()">📋 Copiar BB-code</button>' +
+            '</div>' +
+            '<textarea class="ap-json-box" id="ap-bb-out" readonly onclick="this.select()" style="height:120px"></textarea>' +
+          '</div>' +
+          '<div style="margin-top:8px">' +
+            '<button class="btn-sec" onclick="AP.closeBB()">✖ Fechar</button>' +
           '</div>' +
         '</div>' +
         '<div id="ap-tbl"></div>' +
@@ -644,7 +674,8 @@
       } else {
         badge = '<span class="bdg bdg-w">⏳ em ' + fmtDur(remSend) + '</span>';
       }
-      return '<tr class="' + rowClass + '">' +
+      return '<tr class="' + rowClass + '" id="ap-tr-' + a.id + '">' +
+        '<td class="col-chk"><input type="checkbox" class="ap-chk ap-row-chk" data-id="' + a.id + '"></td>' +
         '<td class="col-num" style="color:#8b6914;font-weight:700;text-align:center">' + pad(i + 1) + '</td>' +
         '<td class="col-village" style="font-weight:700">' + esc(a.origin) + '</td>' +
         '<td class="col-village" style="color:#8b2020;font-weight:700">' + esc(a.dest) + '</td>' +
@@ -663,6 +694,7 @@
 
     tbl.innerHTML = '<div class="ap-tw"><table class="ap-t">' +
       '<thead><tr>' +
+        '<th class="col-chk"></th>' +
         '<th class="col-num">#</th>' +
         '<th class="col-village">Origem</th>' +
         '<th class="col-village">Destino</th>' +
@@ -792,9 +824,10 @@
     toggleJson: function () {
       var panel = g('ap-json-panel');
       if (!panel) return;
+      /* fechar BB se aberto */
+      var bp = g('ap-bb-panel'); if (bp) bp.classList.remove('on');
       var open = panel.classList.toggle('on');
       if (open) {
-        /* Preenche textarea de exportação */
         var out = g('ap-json-out');
         if (out) out.value = JSON.stringify(attacks, null, 2);
       }
@@ -829,6 +862,109 @@
       var panel = g('ap-json-panel');
       if (panel) panel.classList.remove('on');
       var inp = g('ap-json-in'); if (inp) inp.value = '';
+    },
+    toggleBB: function () {
+      var panel = g('ap-bb-panel');
+      if (!panel) return;
+      var open = panel.classList.toggle('on');
+      /* fechar JSON se aberto */
+      var jp = g('ap-json-panel'); if (jp) jp.classList.remove('on');
+      if (open) this._renderBBSel();
+    },
+    closeBB: function () {
+      var panel = g('ap-bb-panel'); if (panel) panel.classList.remove('on');
+      var wrap = g('ap-bb-out-wrap'); if (wrap) wrap.style.display = 'none';
+    },
+    bbSelAll: function (checked) {
+      document.querySelectorAll('.ap-bb-chk').forEach(function(c){ c.checked = checked; });
+    },
+    _renderBBSel: function () {
+      var wrap = g('ap-bb-out-wrap'); if (wrap) wrap.style.display = 'none';
+      var tbl = g('ap-bb-sel-tbl'); if (!tbl) return;
+      if (!attacks.length) { tbl.innerHTML = '<div class="ap-empty">Nenhum ataque para exportar.</div>'; return; }
+      var now = new Date();
+      var rows = attacks.map(function(a, i) {
+        var retT = a.returnTime ? new Date(a.returnTime) : null;
+        var statusTxt = retT && retT < now ? '🏠 Retornou' :
+          a.arriveTime < now ? '⚔ Chegou' :
+          a.sendTime < now ? '✈ Em rota' : '⏳ Aguardando';
+        return '<tr>' +
+          '<td style="text-align:center"><input type="checkbox" class="ap-chk ap-bb-chk" data-id="' + a.id + '" checked></td>' +
+          '<td style="font-weight:700;padding:4px 6px">' + pad(i+1) + '</td>' +
+          '<td style="padding:4px 6px">' + esc(a.origin) + '</td>' +
+          '<td style="padding:4px 6px;color:#8b2020">' + esc(a.dest) + '</td>' +
+          '<td style="padding:4px 6px">' + a.troop.name + '</td>' +
+          '<td style="padding:4px 6px;font-family:monospace;font-size:10px">' + a.sendTime.toLocaleString('pt-BR') + '</td>' +
+          '<td style="padding:4px 6px;font-size:10px">' + statusTxt + '</td>' +
+        '</tr>';
+      }).join('');
+      tbl.innerHTML = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">' +
+        '<thead><tr style="background:#e8d098">' +
+          '<th style="width:24px"></th><th style="padding:4px 6px">N°</th>' +
+          '<th style="padding:4px 6px">Origem</th><th style="padding:4px 6px">Destino</th>' +
+          '<th style="padding:4px 6px">Tropa</th><th style="padding:4px 6px">Envio</th>' +
+          '<th style="padding:4px 6px">Status</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div>';
+    },
+    genBB: function () {
+      var selected = [];
+      document.querySelectorAll('.ap-bb-chk:checked').forEach(function(c) {
+        var id = parseInt(c.getAttribute('data-id'));
+        var atk = attacks.find(function(a){ return a.id === id; });
+        if (atk) selected.push(atk);
+      });
+      if (!selected.length) { alert('Selecione ao menos um ataque para exportar.'); return; }
+      var now = new Date();
+      var lines = [];
+      lines.push('[b]⚔ Attack Planner — ' + WORLD_ID + '[/b]');
+      lines.push('[b]Jogador:[/b] ' + PLAYER_NAME + ' | [b]Gerado em:[/b] ' + now.toLocaleString('pt-BR'));
+      lines.push('');
+      lines.push('[table]');
+      lines.push('[**][~][b]#[/b][~][b]Origem[/b][~][b]Destino[/b][~][b]Tropa[/b][~][b]Envio[/b][~][b]Chegada[/b][~][b]Retorno[/b][~][b]Duração[/b][~][b]Obs.[/b][/**]');
+      selected.forEach(function(a, i) {
+        /* Extrair coords de origem e destino para [coord] */
+        var oCoord = a.origin.match(/(\d+)\|(\d+)/);
+        var dCoord = a.dest.match(/(\d+)\|(\d+)/);
+        var oCell = oCoord ? '[coord]' + oCoord[0] + '[/coord]' : a.origin;
+        var dCell = dCoord ? '[coord]' + dCoord[0] + '[/coord]' : a.dest;
+        /* Nome da aldeia sem as coordenadas para não duplicar */
+        var oName = a.origin.replace(/\s*\(\d+\|\d+\)\s*/g,'').trim();
+        var dName = a.dest.replace(/\s*\(\d+\|\d+\)\s*/g,'').trim();
+        if (oName) oCell = oName + ' ' + oCell;
+        if (dName) dCell = dName + ' ' + dCell;
+        var retStr = a.returnTime ? new Date(a.returnTime).toLocaleString('pt-BR') : '—';
+        var row = '[**]' +
+          '[~]' + pad(i+1) +
+          '[~]' + oCell +
+          '[~]' + dCell +
+          '[~][unit]' + a.troop.id + '[/unit] ' + a.troop.name +
+          '[~]' + a.sendTime.toLocaleString('pt-BR') +
+          '[~]' + a.arriveTime.toLocaleString('pt-BR') +
+          '[~]' + retStr +
+          '[~]' + fmtDur(a.travelMin) +
+          '[~]' + (a.notes || '') +
+          '[/**]';
+        lines.push(row);
+      });
+      lines.push('[/table]');
+      lines.push('');
+      lines.push('[i]Gerado pelo Attack Planner v' + AP_VERSION + '[/i]');
+      var bbOut = g('ap-bb-out');
+      if (bbOut) bbOut.value = lines.join('\n');
+      var wrap = g('ap-bb-out-wrap');
+      if (wrap) wrap.style.display = 'block';
+    },
+    copyBB: function () {
+      var out = g('ap-bb-out');
+      if (!out || !out.value) return;
+      out.select();
+      try {
+        document.execCommand('copy');
+        var btn = event.target;
+        var orig = btn.textContent;
+        btn.textContent = '✅ Copiado!';
+        setTimeout(function(){ btn.textContent = orig; }, 1500);
+      } catch(e) { navigator.clipboard && navigator.clipboard.writeText(out.value); }
     },
     csv: function () {
       if (!attacks.length) { alert('Nenhum ataque para exportar.'); return; }
