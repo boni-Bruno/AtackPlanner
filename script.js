@@ -57,13 +57,17 @@
  * ║  v2.2.0      ║  BB-code simplificado: uma linha por ataque   ║
  * ║  2025-06-06  ║  no formato: Plano de Ataque contra [village] ║
  * ║              ║  (chegada em ...): Unidade mais lenta: [unit] ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v2.3.0      ║  Coordenadas de origem e destino salvas junto ║
+ * ║  2025-06-06  ║  ao ataque. Ao abrir o AP, busca nomes atuais ║
+ * ║              ║  via API get_villages e atualiza automaticam. ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v2.2.0';
+  var AP_VERSION = 'v2.3.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -171,7 +175,54 @@
         if (us) UNIT_SPEED  = parseFloat(us[1]);
         cb();
       })
-      .catch(function () { cb(); }); /* se falhar usa 1/1 */
+      .catch(function () { cb(); });
+  }
+
+  /* ══════════════════════════════════════════════════════
+     ATUALIZA NOMES DAS ALDEIAS — cruza coordenadas salvas
+     com a API /interface.php?func=get_villages
+  ══════════════════════════════════════════════════════ */
+  function refreshVillageNames(cb) {
+    if (!attacks.length) { cb(); return; }
+    fetch('/interface.php?func=get_villages')
+      .then(function(r) { return r.text(); })
+      .then(function(xml) {
+        /* Cada aldeia: <village id=".." x=".." y=".." name=".." .../> */
+        var updated = false;
+        attacks.forEach(function(a) {
+          /* Origem */
+          if (a.originX && a.originY) {
+            var rx = new RegExp(
+              '<village[^>]+x="' + a.originX + '"[^>]+y="' + a.originY + '"[^>]+name="([^"]+)"'
+              + '|' +
+              '<village[^>]+name="([^"]+)"[^>]+x="' + a.originX + '"[^>]+y="' + a.originY + '"'
+            );
+            var m = xml.match(rx);
+            var newName = m ? (m[1] || m[2]) : null;
+            if (newName && decodeURIComponent(newName.replace(/\+/g,' ')) !== a.origin) {
+              a.origin = decodeURIComponent(newName.replace(/\+/g,' '));
+              updated = true;
+            }
+          }
+          /* Destino (caso seja também uma aldeia do jogador) */
+          if (a.destX && a.destY) {
+            var rx2 = new RegExp(
+              '<village[^>]+x="' + a.destX + '"[^>]+y="' + a.destY + '"[^>]+name="([^"]+)"'
+              + '|' +
+              '<village[^>]+name="([^"]+)"[^>]+x="' + a.destX + '"[^>]+y="' + a.destY + '"'
+            );
+            var m2 = xml.match(rx2);
+            var newName2 = m2 ? (m2[1] || m2[2]) : null;
+            if (newName2 && decodeURIComponent(newName2.replace(/\+/g,' ')) !== a.dest) {
+              a.dest = decodeURIComponent(newName2.replace(/\+/g,' '));
+              updated = true;
+            }
+          }
+        });
+        if (updated) persist();
+        cb();
+      })
+      .catch(function() { cb(); });
   }
 
   /* ══════════════════════════════════════════════════════
@@ -681,8 +732,12 @@
       return '<tr class="' + rowClass + '" id="ap-tr-' + a.id + '">' +
         '<td class="col-chk"><input type="checkbox" class="ap-chk ap-row-chk" data-id="' + a.id + '"></td>' +
         '<td class="col-num" style="color:#8b6914;font-weight:700;text-align:center">' + pad(i + 1) + '</td>' +
-        '<td class="col-village" style="font-weight:700">' + esc(a.origin) + '</td>' +
-        '<td class="col-village" style="color:#8b2020;font-weight:700">' + esc(a.dest) + '</td>' +
+        '<td class="col-village" style="font-weight:700">' + esc(a.origin) +
+          (a.originX ? '<br><span style="font-size:9px;color:#8b6914;font-weight:normal">(' + a.originX + '|' + a.originY + ')</span>' : '') +
+        '</td>' +
+        '<td class="col-village" style="color:#8b2020;font-weight:700">' + esc(a.dest) +
+          (a.destX ? '<br><span style="font-size:9px;color:#8b6914;font-weight:normal">(' + a.destX + '|' + a.destY + ')</span>' : '') +
+        '</td>' +
         '<td class="col-troop" style="text-align:center">' +
           '<img src="' + ICON_BASE + a.troop.id + '.png" style="width:16px;height:16px;vertical-align:middle;image-rendering:pixelated;display:block;margin:0 auto" onerror="this.style.display=\'none\'" alt="">' +
           '<span style="font-size:9px">' + a.troop.name + '</span></td>' +
@@ -782,10 +837,17 @@
     },
     save: function () {
       if (!_lastData) { alert('Preencha origem, destino, tropa e horário antes de salvar.'); return; }
-      var origin = g('ap-o-name').value || '(' + g('ap-o-x').value + '|' + g('ap-o-y').value + ')';
-      var dest   = g('ap-d-name').value || '(' + g('ap-d-x').value + '|' + g('ap-d-y').value + ')';
+      var ox = parseInt(g('ap-o-x').value) || null;
+      var oy = parseInt(g('ap-o-y').value) || null;
+      var dx = parseInt(g('ap-d-x').value) || null;
+      var dy = parseInt(g('ap-d-y').value) || null;
+      var origin = g('ap-o-name').value || (ox && oy ? '(' + ox + '|' + oy + ')' : '?');
+      var dest   = g('ap-d-name').value || (dx && dy ? '(' + dx + '|' + dy + ')' : '?');
       attacks.push({
-        id: Date.now(), origin: origin, dest: dest, troop: selTroop,
+        id: Date.now(),
+        origin: origin, originX: ox, originY: oy,
+        dest: dest,     destX: dx,   destY: dy,
+        troop: selTroop,
         distance: _lastData.d, travelMin: _lastData.tmin,
         sendTime: _lastData.sendT, arriveTime: _lastData.arriveT, returnTime: _lastData.returnT,
         notes: g('ap-notes').value, createdAt: new Date()
@@ -987,6 +1049,8 @@
   /* Busca config e substitui pelo modal completo */
   loadWorldConfig(function () {
     attacks = loadAttacks();
+    refreshVillageNames(function () {
+    /* continua abaixo — fechado no final do bloco */
     var old = g('ap-overlay'); if (old) old.remove();
 
     var wrap = document.createElement('div');
@@ -1010,6 +1074,7 @@
     }, 30000);
 
     recalc();
+    }); /* fim refreshVillageNames */
   });
 
 })();
