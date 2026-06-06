@@ -27,13 +27,19 @@
  * ║  v1.4.0      ║  Campo X aceita colar coordenada completa     ║
  * ║  2025-06-06  ║  no formato 490|834 — X e Y preenchidos       ║
  * ║              ║  automaticamente, ignorando o |.              ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v1.5.0      ║  Botões separados: Calcular e Salvar Ataque.  ║
+ * ║  2025-06-06  ║  Salvar só aparece após clicar em Calcular.   ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v1.6.0      ║  Fórmula corrigida: dist × base / (ws × us). ║
+ * ║  2025-06-06  ║  Validado com dados reais do mundo br140.     ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v1.4.0';
+  var AP_VERSION = 'v1.6.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -48,7 +54,8 @@
   var selTroop   = null;
   var planMode   = 'send';
   var pickingMap = null;
-  var _lastData  = null;
+  var _lastData    = null;
+  var _fromCalcBtn = false;
   var WORLD_SPEED = 1;
   var UNIT_SPEED  = 1;
   var STORE_KEY   = 'tw_ap_default';
@@ -428,7 +435,8 @@
           '<div class="ap-sb">' +
             '<input type="text" class="ap-inp" id="ap-notes" placeholder="ex: Nobre + ram, Fake, coordenar com aliado...">' +
             '<div class="ap-act">' +
-              '<button class="btn-pri" onclick="AP.save()">⚔ Calcular &amp; Salvar Ataque</button>' +
+              '<button class="btn-pri" id="ap-btn-calc" onclick="AP.calc()">⚔ Calcular</button>' +
+              '<button class="btn-pri" id="ap-btn-save" onclick="AP.save()" style="display:none;background:#2a5a10;border-color:#1a3a08">💾 Salvar Ataque</button>' +
               '<button class="btn-sec" onclick="AP.clear()">🔄 Limpar</button>' +
             '</div>' +
           '</div>' +
@@ -459,7 +467,7 @@
   function calcTroopTime(distance, baseSpeed) {
     var ws = parseFloat((g('ap-ws') && g('ap-ws').value) || WORLD_SPEED) || 1;
     var us = parseFloat((g('ap-us') && g('ap-us').value) || UNIT_SPEED)  || 1;
-    return distance * baseSpeed * us / ws;
+    return distance * baseSpeed / (ws * us);
   }
 
   /* ══════════════════════════════════════════════════════
@@ -503,6 +511,12 @@
     g('ap-r5').textContent = fmtDT(arriveT);
     resEl.classList.add('on');
     _lastData = { d: d, tmin: tmin, sendT: sendT, arriveT: arriveT };
+    /* Ao recalcular por mudança de input, esconde botão salvar até novo cálculo manual */
+    if (!_fromCalcBtn) {
+      var bs = g('ap-btn-save'); if (bs) bs.style.display = 'none';
+      resEl.classList.remove('on');
+      _lastData = null;
+    }
   }
 
   /* ══════════════════════════════════════════════════════
@@ -603,6 +617,14 @@
         recalc();
       } catch (e) { alert('Não foi possível detectar a aldeia atual. Informe manualmente.'); }
     },
+    calc: function () {
+      _fromCalcBtn = true;
+      recalc();
+      _fromCalcBtn = false;
+      var bs = g('ap-btn-save');
+      if (_lastData && bs) bs.style.display = '';
+      else if (bs) bs.style.display = 'none';
+    },
     save: function () {
       if (!_lastData) { alert('Preencha origem, destino, tropa e horário antes de salvar.'); return; }
       var origin = g('ap-o-name').value || '(' + g('ap-o-x').value + '|' + g('ap-o-y').value + ')';
@@ -625,6 +647,7 @@
       selTroop = null; _lastData = null;
       g('ap-res').classList.remove('on');
       g('ap-dist').style.display = 'none';
+      var bs = g('ap-btn-save'); if (bs) bs.style.display = 'none';
     },
     del: function (id) { attacks = attacks.filter(function (a) { return a.id !== id; }); persist(); renderTable(); },
     sort: function () { attacks.sort(function (a, b) { return a.sendTime - b.sendTime; }); persist(); renderTable(); },
