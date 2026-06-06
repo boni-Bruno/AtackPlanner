@@ -45,13 +45,17 @@
  * ║  v1.9.0      ║  Copiar/Colar JSON para portabilidade.        ║
  * ║  2025-06-06  ║  Status expandido: alerta <10min (pisca),     ║
  * ║              ║  em rota, chegou, retornou. Cor por linha.    ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v2.0.0      ║  Botão copiar JSON; badge de contagem sempre  ║
+ * ║  2025-06-06  ║  visível; tabela responsiva sem scroll lateral;║
+ * ║              ║  ataques sempre ordenados por horário envio.  ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v1.9.0';
+  var AP_VERSION = 'v2.0.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -179,6 +183,7 @@
 
   function persist() {
     localStorage.setItem(STORE_KEY, JSON.stringify(attacks));
+    var bdg = g('ap-badge'); if (bdg) bdg.textContent = attacks.length;
   }
 
   /* ══════════════════════════════════════════════════════
@@ -276,7 +281,7 @@
   ══════════════════════════════════════════════════════ */
   var CSS = [
     '#ap-overlay{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center}',
-    '#ap-modal{background:#f4e4c1;border:3px solid #7a5c1e;border-radius:6px;width:700px;max-width:97vw;max-height:93vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.6);font-family:Verdana,sans-serif;font-size:12px;color:#3b2a0e;position:relative}',
+    '#ap-modal{background:#f4e4c1;border:3px solid #7a5c1e;border-radius:6px;width:96vw;max-width:900px;max-height:95vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.6);font-family:Verdana,sans-serif;font-size:12px;color:#3b2a0e;position:relative}',
     '#ap-modal *{box-sizing:border-box}',
     '#ap-hdr{background:#2c1a06;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:2px solid #8b6914}',
     '#ap-hdr h2{color:#f4d87a;font-size:15px;font-weight:700;margin:0;letter-spacing:1px;text-transform:uppercase;flex:1}',
@@ -340,8 +345,20 @@
     '.ap-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}',
     '.ap-tbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px}',
     '.ap-cnt{font-size:11px;color:#6b4c10}',
-    '.ap-tw{overflow-x:auto}',
-    'table.ap-t{width:100%;border-collapse:collapse;font-size:11px;min-width:580px}',
+    '.ap-tw{width:100%}',
+    'table.ap-t{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed}',
+    'table.ap-t th,table.ap-t td{word-break:break-word;white-space:normal}',
+    'table.ap-t th{padding:6px 4px}table.ap-t td{padding:5px 4px}',
+    'table.ap-t .col-num{width:28px}',
+    'table.ap-t .col-village{width:13%}',
+    'table.ap-t .col-troop{width:9%}',
+    'table.ap-t .col-dt{width:13%}',
+    'table.ap-t .col-dur{width:8%}',
+    'table.ap-t .col-status{width:11%}',
+    'table.ap-t .col-notes{width:10%}',
+    'table.ap-t .col-del{width:28px}',
+    'table.ap-t td.col-dt{font-family:monospace;font-size:9px}',
+    'table.ap-t td.col-ret{font-family:monospace;font-size:9px;color:#3a6010}',
     'table.ap-t th{background:#3d2805;color:#f4d87a;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}',
     'table.ap-t td{padding:7px 8px;border-bottom:1px solid #e8d098;vertical-align:middle}',
     'table.ap-t tr:hover td{background:#fff8e0}table.ap-t tr:last-child td{border-bottom:none}',
@@ -413,7 +430,7 @@
 
       '<div class="ap-tabs">' +
         '<button class="ap-tab on" id="ap-t-plan" onclick="AP.tab(\'plan\')">⚔ Planejar</button>' +
-        '<button class="ap-tab" id="ap-t-list" onclick="AP.tab(\'list\')">📋 Ataques <span id="ap-badge"></span></button>' +
+        '<button class="ap-tab" id="ap-t-list" onclick="AP.tab(\'list\')">📋 Ataques&nbsp;<span id="ap-badge" style="background:#8b2020;color:#fff8e0;border-radius:10px;padding:1px 6px;font-size:10px">0</span></button>' +
       '</div>' +
 
       /* ── PLANEJAR ── */
@@ -511,7 +528,10 @@
           '</div>' +
         '</div>' +
         '<div class="ap-json-panel" id="ap-json-panel">' +
-          '<div style="font-size:10px;font-weight:700;color:#6b4c10;margin-bottom:6px">📤 Copiar — selecione e copie o JSON abaixo:</div>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+            '<span style="font-size:10px;font-weight:700;color:#6b4c10">📤 Exportar — copie o JSON abaixo:</span>' +
+            '<button class="btn-sec" style="font-size:10px;padding:3px 10px" onclick="AP.copyJson()">📋 Copiar tudo</button>' +
+          '</div>' +
           '<textarea class="ap-json-box" id="ap-json-out" readonly onclick="this.select()"></textarea>' +
           '<div style="font-size:10px;font-weight:700;color:#6b4c10;margin:8px 0 4px">📥 Colar — cole um JSON exportado para importar ataques:</div>' +
           '<textarea class="ap-json-box" id="ap-json-in" placeholder="Cole o JSON aqui e clique em Importar..."></textarea>' +
@@ -594,7 +614,7 @@
     var tbl = g('ap-tbl'), tot = g('ap-total'), bdg = g('ap-badge');
     if (!tbl) return;
     tot.textContent = attacks.length + ' ataque(s)';
-    bdg.textContent = attacks.length > 0 ? '(' + attacks.length + ')' : '';
+    if (bdg) bdg.textContent = attacks.length;
 
     if (!attacks.length) {
       tbl.innerHTML = '<div class="ap-empty">⚔️<br>Nenhum ataque planejado.<br><small>Use a aba Planejar para adicionar.</small></div>';
@@ -625,24 +645,36 @@
         badge = '<span class="bdg bdg-w">⏳ em ' + fmtDur(remSend) + '</span>';
       }
       return '<tr class="' + rowClass + '">' +
-        '<td style="color:#8b6914;font-weight:700">#' + pad(i + 1) + '</td>' +
-        '<td style="font-weight:700">' + esc(a.origin) + '</td>' +
-        '<td style="color:#8b2020;font-weight:700">' + esc(a.dest) + '</td>' +
-        '<td><img src="' + ICON_BASE + a.troop.id + '.png" style="width:18px;height:18px;vertical-align:middle;image-rendering:pixelated" ' +
-          'onerror="this.style.display=\'none\'" alt=""> ' + a.troop.name + '</td>' +
-        '<td style="font-family:monospace;font-size:10px">' + a.sendTime.toLocaleString('pt-BR') + '</td>' +
-        '<td style="font-family:monospace;font-size:10px">' + a.arriveTime.toLocaleString('pt-BR') + '</td>' +
-        '<td style="font-family:monospace;font-size:10px;color:#3a6010">' + (a.returnTime ? new Date(a.returnTime).toLocaleString('pt-BR') : '—') + '</td>' +
-        '<td style="font-family:monospace">' + fmtDur(a.travelMin) + '</td>' +
-        '<td>' + badge + '</td>' +
-        '<td style="color:#6b4c10;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(a.notes || '—') + '</td>' +
-        '<td><button class="btn-del" onclick="AP.del(' + a.id + ')">🗑</button></td>' +
+        '<td class="col-num" style="color:#8b6914;font-weight:700;text-align:center">' + pad(i + 1) + '</td>' +
+        '<td class="col-village" style="font-weight:700">' + esc(a.origin) + '</td>' +
+        '<td class="col-village" style="color:#8b2020;font-weight:700">' + esc(a.dest) + '</td>' +
+        '<td class="col-troop" style="text-align:center">' +
+          '<img src="' + ICON_BASE + a.troop.id + '.png" style="width:16px;height:16px;vertical-align:middle;image-rendering:pixelated;display:block;margin:0 auto" onerror="this.style.display=\'none\'" alt="">' +
+          '<span style="font-size:9px">' + a.troop.name + '</span></td>' +
+        '<td class="col-dt">' + a.sendTime.toLocaleString('pt-BR') + '</td>' +
+        '<td class="col-dt">' + a.arriveTime.toLocaleString('pt-BR') + '</td>' +
+        '<td class="col-ret">' + (a.returnTime ? new Date(a.returnTime).toLocaleString('pt-BR') : '—') + '</td>' +
+        '<td class="col-dur" style="font-family:monospace;font-size:9px;text-align:center">' + fmtDur(a.travelMin) + '</td>' +
+        '<td class="col-status">' + badge + '</td>' +
+        '<td class="col-notes" style="color:#6b4c10;overflow:hidden;text-overflow:ellipsis">' + esc(a.notes || '—') + '</td>' +
+        '<td class="col-del" style="text-align:center"><button class="btn-del" onclick="AP.del(' + a.id + ')">🗑</button></td>' +
         '</tr>';
     }).join('');
 
     tbl.innerHTML = '<div class="ap-tw"><table class="ap-t">' +
-      '<thead><tr><th>#</th><th>Origem</th><th>Destino</th><th>Tropa</th>' +
-      '<th>Envio</th><th>Chegada</th><th>Retorno</th><th>Duração</th><th>Status</th><th>Obs.</th><th></th></tr></thead>' +
+      '<thead><tr>' +
+        '<th class="col-num">#</th>' +
+        '<th class="col-village">Origem</th>' +
+        '<th class="col-village">Destino</th>' +
+        '<th class="col-troop">Tropa</th>' +
+        '<th class="col-dt">Envio</th>' +
+        '<th class="col-dt">Chegada</th>' +
+        '<th class="col-dt">Retorno</th>' +
+        '<th class="col-dur">Duração</th>' +
+        '<th class="col-status">Status</th>' +
+        '<th class="col-notes">Obs.</th>' +
+        '<th class="col-del"></th>' +
+      '</tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div>';
   }
 
@@ -722,6 +754,7 @@
         sendTime: _lastData.sendT, arriveTime: _lastData.arriveT, returnTime: _lastData.returnT,
         notes: g('ap-notes').value, createdAt: new Date()
       });
+      attacks.sort(function(a,b){ return new Date(a.sendTime) - new Date(b.sendTime); });
       persist(); renderTable(); this.tab('list');
     },
     clear: function () {
@@ -741,6 +774,20 @@
     clearAll: function () {
       if (!attacks.length) return;
       if (confirm('Remover todos os ' + attacks.length + ' ataques planejados?')) { attacks = []; persist(); renderTable(); }
+    },
+    copyJson: function () {
+      var out = g('ap-json-out');
+      if (!out || !out.value) { alert('Nenhum dado para copiar.'); return; }
+      out.select();
+      try {
+        document.execCommand('copy');
+        var btn = event.target;
+        var orig = btn.textContent;
+        btn.textContent = '✅ Copiado!';
+        setTimeout(function(){ btn.textContent = orig; }, 1500);
+      } catch(e) {
+        navigator.clipboard && navigator.clipboard.writeText(out.value);
+      }
     },
     toggleJson: function () {
       var panel = g('ap-json-panel');
@@ -770,6 +817,7 @@
         var existingIds = attacks.map(function(a){ return a.id; });
         var news = parsed.filter(function(a){ return existingIds.indexOf(a.id) === -1; });
         attacks = attacks.concat(news);
+        attacks.sort(function(a,b){ return new Date(a.sendTime) - new Date(b.sendTime); });
         persist();
         g('ap-json-in').value = '';
         g('ap-json-panel').classList.remove('on');
