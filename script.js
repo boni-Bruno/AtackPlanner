@@ -1,8 +1,29 @@
 /**
- * Attack Planner — Tribal Wars
- * github.com/boni-bruno/AtackPlanner
- *
- * Uso: javascript: $.getScript('https://raw.githubusercontent.com/boni-bruno/AtackPlanner/main/script.js');
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║              ATTACK PLANNER — Tribal Wars                   ║
+ * ║          github.com/boni-bruno/AtackPlanner                 ║
+ * ╠══════════════════════════════════════════════════════════════╣
+ * ║  Uso:                                                        ║
+ * ║  javascript: $.getScript(                                    ║
+ * ║    'https://raw.githubusercontent.com/boni-bruno/           ║
+ * ║     AtackPlanner/main/script.js');                           ║
+ * ╠══════════════════════════════════════════════════════════════╣
+ * ║  CHANGELOG                                                   ║
+ * ╠══════════════╦═══════════════════════════════════════════════╣
+ * ║  v1.0.0      ║  Versão inicial: pop-up, tropas, tabela,      ║
+ * ║  2025-01-01  ║  localStorage por mundo.                      ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v1.1.0      ║  Script abre direto ao executar (sem botão    ║
+ * ║  2025-01-02  ║  fixo). Lê game_data do jogo.                 ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v1.2.0      ║  Lê speed e unit_speed via API do servidor    ║
+ * ║  2025-01-03  ║  (/interface.php?func=get_config).            ║
+ * ║              ║  Fórmula correta: dist × base × us / ws.      ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v1.3.0      ║  Changelog no cabeçalho. Seção redundante     ║
+ * ║  2025-06-06  ║  de config removida; ícone ✏️ no cabeçalho    ║
+ * ║              ║  permite editar velocidades inline.           ║
+ * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
@@ -215,9 +236,14 @@
     '.ap-rc .v{font-size:14px;font-weight:700;color:#8b2020;display:block}.ap-rc .l{font-size:9px;color:#6b4c10;text-transform:uppercase}',
     '.ap-ir{display:flex;justify-content:space-between;font-size:11px;padding:3px 0}.ap-ir strong{color:#3b2a0e}',
     '.ap-sep{border:none;border-top:1px solid #e8d098;margin:8px 0}',
-    '.ap-ibar{background:#e8d098;border:1px solid #c8a84b;border-radius:3px;padding:7px 10px;font-size:11px;margin-bottom:12px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}',
+    '.ap-ibar{background:#e8d098;border:1px solid #c8a84b;border-radius:3px;padding:7px 10px;font-size:11px;margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}',
     '.ap-ibar span{color:#5a3a00}.ap-ibar strong{color:#3b2a0e}',
     '.ap-ibar .tag{background:#2c1a06;color:#f4d87a;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700}',
+    '.ap-ibar .ap-edit-btn{margin-left:auto;background:transparent;border:1px solid #b8901a;border-radius:3px;padding:2px 8px;cursor:pointer;font-size:14px;color:#7a5c1e;line-height:1.4;transition:all .15s}',
+    '.ap-ibar .ap-edit-btn:hover{background:#fff3cc;border-color:#d4941e}',
+    '.ap-ibar .ap-edit-btn.active{background:#ffe0c0;border-color:#8b2020;color:#8b2020}',
+    '#ap-edit-panel{display:none;background:#fff8e0;border:1px solid #d4941e;border-radius:3px;padding:10px;margin-bottom:12px}',
+    '#ap-edit-panel.on{display:block}',
     '.btn-pri{width:100%;padding:9px;background:#8b2020;color:#fff8e0;border:1px solid #6a1010;border-radius:3px;font-size:12px;font-family:Verdana,sans-serif;font-weight:700;cursor:pointer;margin-top:10px}',
     '.btn-pri:hover{background:#a03030}',
     '.btn-sec{padding:6px 12px;background:#fffbe6;color:#5a3a00;border:1px solid #b8901a;border-radius:3px;font-size:11px;font-family:Verdana,sans-serif;cursor:pointer;font-weight:700}',
@@ -258,9 +284,18 @@
     var ibar = '<div class="ap-ibar">' +
       '<span class="tag">' + esc(WORLD_ID) + '</span>' +
       (PLAYER_NAME ? '<span>👤 <strong>' + esc(PLAYER_NAME) + '</strong></span>' : '') +
-      '<span>⚡ Vel. mundo: <strong>' + WORLD_SPEED + '×</strong></span>' +
-      '<span>🐎 Vel. unidades: <strong>' + UNIT_SPEED + '×</strong></span>' +
+      '<span>⚡ Vel. mundo: <strong id="ap-ibar-ws">' + WORLD_SPEED + '×</strong></span>' +
+      '<span>🐎 Vel. unidades: <strong id="ap-ibar-us">' + UNIT_SPEED + '×</strong></span>' +
       (CURRENT.coord ? '<span>🏰 <strong>' + esc(CURRENT.name || CURRENT.coord) + '</strong> ' + esc(CURRENT.coord) + '</span>' : '') +
+      '<button class="ap-edit-btn" id="ap-edit-btn" onclick="AP.toggleEdit()" title="Editar velocidades">✏️</button>' +
+      '</div>' +
+      '<div id="ap-edit-panel">' +
+        '<div class="g2">' +
+          '<div class="ap-fld"><label class="ap-lbl">Velocidade do Mundo (×)</label>' +
+            '<input type="number" class="ap-inp" id="ap-ws" value="' + WORLD_SPEED + '" min="0.1" step="0.1"></div>' +
+          '<div class="ap-fld"><label class="ap-lbl">Velocidade das Unidades (×)</label>' +
+            '<input type="number" class="ap-inp" id="ap-us" value="' + UNIT_SPEED + '" min="0.1" step="0.1"></div>' +
+        '</div>' +
       '</div>';
 
     return '<div id="ap-overlay" onclick="if(event.target===this)AP.close()">' +
@@ -283,19 +318,6 @@
 
         ibar +
         '<div id="ap-hint"></div>' +
-
-        /* Configuração do mundo — somente leitura */
-        '<div class="ap-sec">' +
-          '<div class="ap-sh">🌍 Configuração do Mundo (lida automaticamente)</div>' +
-          '<div class="ap-sb g3">' +
-            '<div class="ap-fld"><label class="ap-lbl">Velocidade do Mundo</label>' +
-              '<input type="number" class="ap-inp" id="ap-ws" value="' + WORLD_SPEED + '" min="0.1" step="0.1"></div>' +
-            '<div class="ap-fld"><label class="ap-lbl">Velocidade das Unidades</label>' +
-              '<input type="number" class="ap-inp" id="ap-us" value="' + UNIT_SPEED + '" min="0.1" step="0.1"></div>' +
-            '<div class="ap-fld"><label class="ap-lbl">Mundo</label>' +
-              '<input type="text" class="ap-inp" id="ap-wid" value="' + esc(WORLD_ID) + '" readonly></div>' +
-          '</div>' +
-        '</div>' +
 
         /* Aldeias */
         '<div class="ap-sec">' +
@@ -487,6 +509,21 @@
   ══════════════════════════════════════════════════════ */
   window.AP = {
     close: function () { var el = g('ap-overlay'); if (el) el.remove(); stopPick(); },
+    toggleEdit: function () {
+      var panel = g('ap-edit-panel');
+      var btn   = g('ap-edit-btn');
+      if (!panel) return;
+      var open = panel.classList.toggle('on');
+      if (btn) btn.classList.toggle('active', open);
+      if (!open) {
+        /* Ao fechar, atualiza os textos do cabeçalho */
+        var ws = parseFloat(g('ap-ws').value) || WORLD_SPEED;
+        var us = parseFloat(g('ap-us').value) || UNIT_SPEED;
+        var wsEl = g('ap-ibar-ws'); if (wsEl) wsEl.textContent = ws + '×';
+        var usEl = g('ap-ibar-us'); if (usEl) usEl.textContent = us + '×';
+        recalc();
+      }
+    },
     tab: function (t) {
       ['plan', 'list'].forEach(function (x) {
         var tab = g('ap-t-' + x), pnl = g('ap-p-' + x);
