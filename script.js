@@ -53,13 +53,17 @@
  * ║  v2.1.0      ║  Exportação BB-code para fórum TW com seleção ║
  * ║  2025-06-06  ║  individual de ataques; [coord], [unit] e     ║
  * ║              ║  botão copiar. Inclui coluna Obs.             ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v2.2.0      ║  BB-code simplificado: uma linha por ataque   ║
+ * ║  2025-06-06  ║  no formato: Plano de Ataque contra [village] ║
+ * ║              ║  (chegada em ...): Unidade mais lenta: [unit] ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v2.1.0';
+  var AP_VERSION = 'v2.2.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -914,41 +918,22 @@
         if (atk) selected.push(atk);
       });
       if (!selected.length) { alert('Selecione ao menos um ataque para exportar.'); return; }
-      var now = new Date();
       var lines = [];
-      lines.push('[b]⚔ Attack Planner — ' + WORLD_ID + '[/b]');
-      lines.push('[b]Jogador:[/b] ' + PLAYER_NAME + ' | [b]Gerado em:[/b] ' + now.toLocaleString('pt-BR'));
-      lines.push('');
-      lines.push('[table]');
-      lines.push('[**][~][b]#[/b][~][b]Origem[/b][~][b]Destino[/b][~][b]Tropa[/b][~][b]Envio[/b][~][b]Chegada[/b][~][b]Retorno[/b][~][b]Duração[/b][~][b]Obs.[/b][/**]');
-      selected.forEach(function(a, i) {
-        /* Extrair coords de origem e destino para [coord] */
-        var oCoord = a.origin.match(/(\d+)\|(\d+)/);
+      selected.forEach(function(a) {
+        /* Extrai coordenada do destino para [village] */
         var dCoord = a.dest.match(/(\d+)\|(\d+)/);
-        var oCell = oCoord ? '[coord]' + oCoord[0] + '[/coord]' : a.origin;
-        var dCell = dCoord ? '[coord]' + dCoord[0] + '[/coord]' : a.dest;
-        /* Nome da aldeia sem as coordenadas para não duplicar */
-        var oName = a.origin.replace(/\s*\(\d+\|\d+\)\s*/g,'').trim();
-        var dName = a.dest.replace(/\s*\(\d+\|\d+\)\s*/g,'').trim();
-        if (oName) oCell = oName + ' ' + oCell;
-        if (dName) dCell = dName + ' ' + dCell;
-        var retStr = a.returnTime ? new Date(a.returnTime).toLocaleString('pt-BR') : '—';
-        var row = '[**]' +
-          '[~]' + pad(i+1) +
-          '[~]' + oCell +
-          '[~]' + dCell +
-          '[~][unit]' + a.troop.id + '[/unit] ' + a.troop.name +
-          '[~]' + a.sendTime.toLocaleString('pt-BR') +
-          '[~]' + a.arriveTime.toLocaleString('pt-BR') +
-          '[~]' + retStr +
-          '[~]' + fmtDur(a.travelMin) +
-          '[~]' + (a.notes || '') +
-          '[/**]';
-        lines.push(row);
+        var destTag = dCoord
+          ? '[village]' + dCoord[1] + '|' + dCoord[2] + '[/village]'
+          : '[b]' + a.dest + '[/b]';
+        /* Data de chegada no formato dd/mm/aaaa hh:mm:ss */
+        var arr = a.arriveTime;
+        var chegada = pad(arr.getDate()) + '/' + pad(arr.getMonth()+1) + '/' + arr.getFullYear() +
+          ' ' + pad(arr.getHours()) + ':' + pad(arr.getMinutes()) + ':' + pad(arr.getSeconds());
+        var linha = 'Plano de Ataque contra a aldeia ' + destTag +
+          ' (chegada em ' + chegada + '): ' +
+          'Unidade mais lenta: [unit]' + a.troop.id + '[/unit]';
+        lines.push(linha);
       });
-      lines.push('[/table]');
-      lines.push('');
-      lines.push('[i]Gerado pelo Attack Planner v' + AP_VERSION + '[/i]');
       var bbOut = g('ap-bb-out');
       if (bbOut) bbOut.value = lines.join('\n');
       var wrap = g('ap-bb-out-wrap');
