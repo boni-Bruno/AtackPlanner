@@ -33,6 +33,8 @@
 (function () {
   'use strict';
 
+  var AP_VERSION = 'v1.4.0';
+
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
     document.getElementById('ap-overlay').remove();
@@ -343,7 +345,7 @@
       '<div id="ap-hdr">' +
         '<span style="font-size:22px">⚔️</span>' +
         '<div style="flex:1"><h2>Attack Planner</h2>' +
-          '<small>Tribal Wars · Planejador de Ataques</small></div>' +
+          '<small>Tribal Wars · Planejador de Ataques &nbsp;<span style="color:#f4d87a;font-weight:700">' + AP_VERSION + '</span></small></div>' +
         '<button id="ap-x" onclick="AP.close()" title="Fechar">✕</button>' +
       '</div>' +
 
