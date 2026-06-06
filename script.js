@@ -289,7 +289,7 @@
   ══════════════════════════════════════════════════════ */
   var CSS = [
     '#ap-overlay{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center}',
-    '#ap-modal{background:#f4e4c1;border:3px solid #7a5c1e;border-radius:6px;width:96vw;max-width:900px;max-height:95vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.6);font-family:Verdana,sans-serif;font-size:12px;color:#3b2a0e;position:relative}',
+    '#ap-modal{background:#f4e4c1;border:3px solid #7a5c1e;border-radius:6px;width:98vw;max-width:1100px;max-height:95vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.6);font-family:Verdana,sans-serif;font-size:12px;color:#3b2a0e;position:relative}',
     '#ap-modal *{box-sizing:border-box}',
     '#ap-hdr{background:#2c1a06;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:2px solid #8b6914}',
     '#ap-hdr h2{color:#f4d87a;font-size:15px;font-weight:700;margin:0;letter-spacing:1px;text-transform:uppercase;flex:1}',
@@ -358,9 +358,9 @@
     'table.ap-t th,table.ap-t td{word-break:break-word;white-space:normal}',
     'table.ap-t th{padding:6px 4px}table.ap-t td{padding:5px 4px}',
     'table.ap-t .col-num{width:28px}',
-    'table.ap-t .col-village{width:13%}',
+    'table.ap-t .col-village{width:18%}',
     'table.ap-t .col-troop{width:9%}',
-    'table.ap-t .col-dt{width:13%}',
+    'table.ap-t .col-dt{width:11%}',
     'table.ap-t .col-dur{width:8%}',
     'table.ap-t .col-status{width:11%}',
     'table.ap-t .col-notes{width:10%}',
