@@ -368,7 +368,7 @@
               '<label class="ap-lbl">Aldeia de Origem</label>' +
               '<input type="text" class="ap-inp" id="ap-o-name" placeholder="Nome" value="' + esc(CURRENT.name || '') + '">' +
               '<div class="ap-row">' +
-                '<input type="text" class="ap-inp" id="ap-o-x" placeholder="X ou 490|834" style="width:110px;flex:none" value="' + (CURRENT.x || '') + '' title="Cole X, Y ou coordenada no formato 490|834">' +
+                '<input type="text" class="ap-inp" id="ap-o-x" placeholder="X ou 490|834" style="width:110px;flex:none" value="' + (CURRENT.x || '') + '" title="Cole X, Y ou coordenada no formato 490|834">' +
                 '<input type="text" class="ap-inp" id="ap-o-y" placeholder="Y" style="width:62px;flex:none" value="' + (CURRENT.y || '') + '">' +
                 '<button class="btn-map" id="ap-bmo" onclick="AP.pick(\'origin\')">🗺 Mapa</button>' +
                 '<button class="btn-cur" onclick="AP.cur()">📍 Atual</button>' +
