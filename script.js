@@ -61,13 +61,17 @@
  * ║  v2.3.0      ║  Coordenadas de origem e destino salvas junto ║
  * ║  2025-06-06  ║  ao ataque. Ao abrir o AP, busca nomes atuais ║
  * ║              ║  via API get_villages e atualiza automaticam. ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v2.4.0      ║  Atualização de nomes via game_data da página ║
+ * ║  2025-06-06  ║  atual + scripts inline. API get_villages     ║
+ * ║              ║  removida (não suportada no TW BR).           ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v2.3.0';
+  var AP_VERSION = 'v2.4.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -179,50 +183,57 @@
   }
 
   /* ══════════════════════════════════════════════════════
-     ATUALIZA NOMES DAS ALDEIAS — cruza coordenadas salvas
-     com a API /interface.php?func=get_villages
+     ATUALIZA NOMES DAS ALDEIAS
+     Cruza coordenadas salvas com game_data de todas as
+     páginas visitadas — atualiza nomes em tempo real.
   ══════════════════════════════════════════════════════ */
   function refreshVillageNames(cb) {
     if (!attacks.length) { cb(); return; }
-    fetch('/interface.php?func=get_villages')
-      .then(function(r) { return r.text(); })
-      .then(function(xml) {
-        /* Cada aldeia: <village id=".." x=".." y=".." name=".." .../> */
-        var updated = false;
+    var updated = false;
+
+    /* 1. Aldeia atual da página — sempre disponível via game_data */
+    try {
+      var gv = window.game_data && window.game_data.village;
+      if (gv && gv.x && gv.y && gv.name) {
+        var cx = parseInt(gv.x), cy = parseInt(gv.y), cname = gv.name;
         attacks.forEach(function(a) {
-          /* Origem */
-          if (a.originX && a.originY) {
-            var rx = new RegExp(
-              '<village[^>]+x="' + a.originX + '"[^>]+y="' + a.originY + '"[^>]+name="([^"]+)"'
-              + '|' +
-              '<village[^>]+name="([^"]+)"[^>]+x="' + a.originX + '"[^>]+y="' + a.originY + '"'
-            );
-            var m = xml.match(rx);
-            var newName = m ? (m[1] || m[2]) : null;
-            if (newName && decodeURIComponent(newName.replace(/\+/g,' ')) !== a.origin) {
-              a.origin = decodeURIComponent(newName.replace(/\+/g,' '));
-              updated = true;
-            }
+          if (a.originX === cx && a.originY === cy && a.origin !== cname) {
+            a.origin = cname; updated = true;
           }
-          /* Destino (caso seja também uma aldeia do jogador) */
-          if (a.destX && a.destY) {
-            var rx2 = new RegExp(
-              '<village[^>]+x="' + a.destX + '"[^>]+y="' + a.destY + '"[^>]+name="([^"]+)"'
-              + '|' +
-              '<village[^>]+name="([^"]+)"[^>]+x="' + a.destX + '"[^>]+y="' + a.destY + '"'
-            );
-            var m2 = xml.match(rx2);
-            var newName2 = m2 ? (m2[1] || m2[2]) : null;
-            if (newName2 && decodeURIComponent(newName2.replace(/\+/g,' ')) !== a.dest) {
-              a.dest = decodeURIComponent(newName2.replace(/\+/g,' '));
-              updated = true;
-            }
+          if (a.destX === cx && a.destY === cy && a.dest !== cname) {
+            a.dest = cname; updated = true;
           }
         });
-        if (updated) persist();
-        cb();
-      })
-      .catch(function() { cb(); });
+      }
+    } catch(e) {}
+
+    /* 2. Todas as aldeias do jogador via script inline da página */
+    /* O TW injeta updateGameData() com dados de cada aldeia visitada */
+    try {
+      var allScripts = Array.from(document.querySelectorAll('script:not([src])')).map(function(s){ return s.textContent; }).join('\n');
+      var re = /"x":(\d+),"y":(\d+)[^}]*?"name":"([^"]+)"|"name":"([^"]+)"[^}]*?"x":(\d+),"y":(\d+)/g;
+      var match;
+      var villageMap = {}; /* 'x|y' -> name */
+      while ((match = re.exec(allScripts)) !== null) {
+        var vx = parseInt(match[1] || match[5]);
+        var vy = parseInt(match[2] || match[6]);
+        var vname = match[3] || match[4];
+        if (vx && vy && vname) villageMap[vx + '|' + vy] = vname;
+      }
+      attacks.forEach(function(a) {
+        var oKey = a.originX + '|' + a.originY;
+        var dKey = a.destX + '|' + a.destY;
+        if (villageMap[oKey] && villageMap[oKey] !== a.origin) {
+          a.origin = villageMap[oKey]; updated = true;
+        }
+        if (villageMap[dKey] && villageMap[dKey] !== a.dest) {
+          a.dest = villageMap[dKey]; updated = true;
+        }
+      });
+    } catch(e) {}
+
+    if (updated) persist();
+    cb();
   }
 
   /* ══════════════════════════════════════════════════════
@@ -1050,7 +1061,6 @@
   loadWorldConfig(function () {
     attacks = loadAttacks();
     refreshVillageNames(function () {
-    /* continua abaixo — fechado no final do bloco */
     var old = g('ap-overlay'); if (old) old.remove();
 
     var wrap = document.createElement('div');
