@@ -292,51 +292,71 @@
 
   /* Busca ou cria a aba 'json_attack_plan' no memo */
   function initMemoTab(cb) {
+    /* Usa setTimeout como safety net — garante que cb() sempre é chamado */
+    var called = false;
+    var safe = function() { if (!called) { called = true; cb(); } };
+    setTimeout(safe, 5000); /* timeout de 5s */
+
     var villageId = GD.village && GD.village.id;
     var h = GD.csrf;
-    if (!villageId || !h) { cb(); return; }
+    if (!villageId || !h) { safe(); return; }
+
     fetch('/game.php?village=' + villageId + '&screen=memo')
       .then(function(r) { return r.text(); })
       .then(function(html) {
-        /* Procura aba json_attack_plan e seu tab_id */
-        /* Padrão: selectTab(NNNN); ...>json_attack_plan */
-        var tabs = html.match(/selectTab\((\d+)\)[^>]*>[^<]*json_attack_plan/g);
-        if (tabs && tabs.length) {
-          var m = tabs[0].match(/selectTab\((\d+)\)/);
-          if (m) { MEMO_TAB_ID = m[1]; cb(); return; }
-        }
-        /* Também tenta via strong (aba selecionada não tem selectTab) */
-        var sel = html.match(/<strong>[^<]*json_attack_plan[^<]*<\/strong>[\s\S]{0,300}?name="tab_id" value="(\d+)"/);
-        if (!sel) sel = html.match(/name="tab_id" value="(\d+)"[\s\S]{0,500}?json_attack_plan/);
-        if (sel) { MEMO_TAB_ID = sel[1]; cb(); return; }
-        /* Aba não existe — cria */
-        TribalWars.post('memo', {ajaxaction: 'add_tab'}, {}, function(r) {
-          if (!r || !r.id) { cb(); return; }
+        /* Tenta achar tab_id da aba json_attack_plan */
+        /* Aba não selecionada: selectTab(NNN)...>json_attack_plan */
+        var m1 = html.match(/selectTab\((\d+)\)[^>]*>[^<]*json_attack_plan/);
+        if (m1) { MEMO_TAB_ID = m1[1]; safe(); return; }
+        /* Aba selecionada: aparece em <strong> sem selectTab */
+        var m2 = html.match(/name="tab_id" value="(\d+)"[\s\S]{0,800}json_attack_plan/);
+        if (!m2) m2 = html.match(/json_attack_plan[\s\S]{0,800}?name="tab_id" value="(\d+)"/);
+        if (m2) { MEMO_TAB_ID = m2[1]; safe(); return; }
+
+        /* Não achou — cria via fetch POST (não usa TribalWars.post) */
+        var bodyAdd = 'h=' + encodeURIComponent(h);
+        fetch('/game.php?village=' + villageId + '&screen=memo&ajaxaction=add_tab&h=' + h, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+          body: bodyAdd
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(r) {
+          if (!r || !r.id) { safe(); return; }
           var newId = r.id;
-          TribalWars.post('memo', {ajaxaction: 'rename_tab'}, {id: newId, newTitle: 'json_attack_plan'}, function() {
-            MEMO_TAB_ID = newId;
-            cb();
-          });
-        });
+          var bodyRename = 'id=' + encodeURIComponent(newId) + '&newTitle=json_attack_plan&h=' + encodeURIComponent(h);
+          fetch('/game.php?village=' + villageId + '&screen=memo&ajaxaction=rename_tab&h=' + h, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+            body: bodyRename
+          })
+          .then(function() { MEMO_TAB_ID = newId; safe(); })
+          .catch(safe);
+        })
+        .catch(safe);
       })
-      .catch(function() { cb(); });
+      .catch(safe);
   }
 
-  /* Lê JSON do memo e mescla com localStorage (importação automática) */
+  /* Lê JSON do memo e mescla com localStorage */
   function importFromMemo(cb) {
-    if (!MEMO_TAB_ID) { cb(); return; }
+    var called = false;
+    var safe = function() { if (!called) { called = true; cb(); } };
+    setTimeout(safe, 5000);
+
+    if (!MEMO_TAB_ID) { safe(); return; }
     var villageId = GD.village && GD.village.id;
-    if (!villageId) { cb(); return; }
+    if (!villageId) { safe(); return; }
+
     fetch('/game.php?village=' + villageId + '&screen=memo')
       .then(function(r) { return r.text(); })
       .then(function(html) {
-        /* Extrai conteúdo do textarea da aba correta */
         var re = new RegExp('name="tab_id" value="' + MEMO_TAB_ID + '"[\\s\\S]*?<textarea[^>]*>([\\s\\S]*?)<\/textarea>');
         var m = html.match(re);
-        if (!m || !m[1].trim()) { cb(); return; }
+        if (!m || !m[1].trim()) { safe(); return; }
         try {
           var imported = JSON.parse(m[1].trim());
-          if (!Array.isArray(imported)) { cb(); return; }
+          if (!Array.isArray(imported)) { safe(); return; }
           var parsed = imported.map(function(a) {
             return Object.assign({}, a, {
               sendTime:   new Date(a.sendTime),
@@ -345,7 +365,6 @@
               createdAt:  new Date(a.createdAt)
             });
           });
-          /* Mescla: memo tem prioridade sobre localStorage */
           var localIds = attacks.map(function(a) { return a.id; });
           var news = parsed.filter(function(a) { return localIds.indexOf(a.id) === -1; });
           if (news.length) {
@@ -354,9 +373,9 @@
             localStorage.setItem(STORE_KEY, JSON.stringify(attacks));
           }
         } catch(e) {}
-        cb();
+        safe();
       })
-      .catch(function() { cb(); });
+      .catch(safe);
   }
 
   /* ══════════════════════════════════════════════════════
