@@ -69,13 +69,17 @@
  * ║  v2.5.0      ║  Badge atualizado ao abrir. Origem somente    ║
  * ║  2025-06-06  ║  leitura. Campo Y removido (cola X|Y no X).  ║
  * ║              ║  Checkbox da tabela removido.                 ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v2.6.0      ║  Badge corrigido (atualiza após HTML injetar).║
+ * ║  2025-06-06  ║  Botão Mapa removido. Coluna # sem quebra de  ║
+ * ║              ║  linha (#001 em vez de # / 0 / 1).           ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v2.5.0';
+  var AP_VERSION = 'v2.6.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -89,7 +93,6 @@
   var attacks    = [];
   var selTroop   = null;
   var planMode   = 'send';
-  var pickingMap = null;
   var _lastData    = null;
   var _fromCalcBtn = false;
   var WORLD_SPEED = 1;
@@ -316,39 +319,7 @@
   /* ══════════════════════════════════════════════════════
      SELEÇÃO POR CLIQUE NO MAPA
   ══════════════════════════════════════════════════════ */
-  function startPick(type) {
-    pickingMap = type;
-    var hint = g('ap-hint');
-    hint.textContent = '🗺️ Clique em uma aldeia no mapa para definir como ' + (type === 'origin' ? 'ORIGEM' : 'DESTINO') + '...';
-    hint.style.display = 'block';
-    document.addEventListener('click', onMapClick, true);
-  }
 
-  function stopPick() {
-    pickingMap = null;
-    var hint = g('ap-hint');
-    if (hint) hint.style.display = 'none';
-    document.removeEventListener('click', onMapClick, true);
-    ['ap-bmo', 'ap-bmd'].forEach(function (id) { var b = g(id); if (b) b.classList.remove('picking'); });
-  }
-
-  function onMapClick(e) {
-    var link = e.target.closest && e.target.closest('a[href]');
-    if (!link) return;
-    var href = link.href || '';
-    var xm = href.match(/[?&]x=(\d+)/);
-    var ym = href.match(/[?&]y=(\d+)/);
-    if (!xm || !ym) return;
-    e.preventDefault(); e.stopPropagation();
-    var x = parseInt(xm[1]), y = parseInt(ym[1]);
-    var name = (link.getAttribute('data-village-name') || link.title || link.textContent || '').trim() || '(' + x + '|' + y + ')';
-    var pre = pickingMap === 'origin' ? 'ap-o' : 'ap-d';
-    g(pre + '-name').value = name;
-    g(pre + '-x').value = x;
-    g(pre + '-y').value = y;
-    stopPick();
-    recalc();
-  }
 
   /* ══════════════════════════════════════════════════════
      CSS
@@ -378,11 +349,8 @@
     '.ap-inp:focus,.ap-sel:focus{outline:none;border-color:#d4941e;box-shadow:0 0 0 2px rgba(212,148,30,.2)}',
     '.ap-inp[readonly]{background:#f0e8d0;color:#6b4c10;cursor:default}',
     '.ap-row{display:flex;gap:6px;align-items:flex-end;margin-top:6px}',
-    '.btn-map{padding:6px 9px;background:#5a7a1e;color:#e8f8a0;border:1px solid #3a5a0e;border-radius:3px;cursor:pointer;font-size:11px;font-weight:700;font-family:Verdana,sans-serif;white-space:nowrap}',
-    '.btn-map:hover{background:#6a9020}.btn-map.picking{background:#9a6010;border-color:#6a4008}',
     '.btn-cur{padding:6px 8px;background:#3a5a8a;color:#c8e0ff;border:1px solid #1a3a6a;border-radius:3px;cursor:pointer;font-size:10px;font-weight:700;font-family:Verdana,sans-serif;white-space:nowrap}',
     '.btn-cur:hover{background:#4a6a9a}',
-    '#ap-hint{display:none;background:#e8f8a0;border:1px solid #5a7a1e;border-radius:3px;padding:7px 10px;font-size:11px;color:#3a5a00;margin-bottom:10px;font-weight:700}',
     '.ap-dist{display:none;background:#fff3cc;border:1px solid #d4941e;border-radius:3px;padding:6px 10px;margin-top:8px;font-size:11px}',
     '.ap-tgrd{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}',
     '.ap-trp{border:1px solid #c8a84b;border-radius:3px;padding:6px 4px;text-align:center;cursor:pointer;background:#fffbe6;transition:all .15s}',
@@ -422,8 +390,9 @@
     '.ap-tw{width:100%}',
     'table.ap-t{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed}',
     'table.ap-t th,table.ap-t td{word-break:break-word;white-space:normal}',
+    'table.ap-t .col-num{white-space:nowrap !important}',
     'table.ap-t th{padding:6px 4px}table.ap-t td{padding:5px 4px}',
-    'table.ap-t .col-num{width:28px}',
+    'table.ap-t .col-num{width:42px;white-space:nowrap;font-family:monospace}',
     'table.ap-t .col-village{width:18%}',
     'table.ap-t .col-troop{width:9%}',
     'table.ap-t .col-dt{width:11%}',
@@ -516,8 +485,7 @@
       '<div class="ap-pnl on" id="ap-p-plan">' +
 
         ibar +
-        '<div id="ap-hint"></div>' +
-
+  
         /* Aldeias */
         '<div class="ap-sec">' +
           '<div class="ap-sh">🏰 Aldeias</div>' +
@@ -537,7 +505,7 @@
               '<div class="ap-row">' +
                 '<input type="text" class="ap-inp" id="ap-d-x" placeholder="Cole 490|834 aqui" style="flex:1" title="Cole a coordenada no formato 490|834">' +
                 '<input type="hidden" id="ap-d-y">' +
-                '<button class="btn-map" id="ap-bmd" onclick="AP.pick(\'dest\')">🗺 Mapa</button>' +
+
               '</div>' +
             '</div>' +
           '</div>' +
@@ -742,7 +710,7 @@
         badge = '<span class="bdg bdg-w">⏳ em ' + fmtDur(remSend) + '</span>';
       }
       return '<tr class="' + rowClass + '" id="ap-tr-' + a.id + '">' +
-        '<td class="col-num" style="color:#8b6914;font-weight:700;text-align:center">' + pad(i + 1) + '</td>' +
+        '<td class="col-num" style="color:#8b6914;font-weight:700;text-align:center;white-space:nowrap">#' + pad(i + 1) + '</td>' +
         '<td class="col-village" style="font-weight:700">' + esc(a.origin) +
           (a.originX ? '<br><span style="font-size:9px;color:#8b6914;font-weight:normal">(' + a.originX + '|' + a.originY + ')</span>' : '') +
         '</td>' +
@@ -764,7 +732,7 @@
 
     tbl.innerHTML = '<div class="ap-tw"><table class="ap-t">' +
       '<thead><tr>' +
-        '<th class="col-num">#</th>' +
+        '<th class="col-num" style="white-space:nowrap">#</th>' +
         '<th class="col-village">Origem</th>' +
         '<th class="col-village">Destino</th>' +
         '<th class="col-troop">Tropa</th>' +
@@ -783,7 +751,7 @@
      API PÚBLICA
   ══════════════════════════════════════════════════════ */
   window.AP = {
-    close: function () { var el = g('ap-overlay'); if (el) el.remove(); stopPick(); },
+    close: function () { var el = g('ap-overlay'); if (el) el.remove(); },
     toggleEdit: function () {
       var panel = g('ap-edit-panel');
       var btn   = g('ap-edit-btn');
@@ -821,12 +789,7 @@
       g('ap-fa').style.display = m === 'arrive' ? '' : 'none';
       recalc();
     },
-    pick: function (type) {
-      if (pickingMap === type) { stopPick(); return; }
-      stopPick();
-      g('ap-bm' + (type === 'origin' ? 'o' : 'd')).classList.add('picking');
-      startPick(type);
-    },
+
     cur: function () {
       try {
         var v = window.game_data && window.game_data.village;
@@ -1063,15 +1026,16 @@
   /* Busca config e substitui pelo modal completo */
   loadWorldConfig(function () {
     attacks = loadAttacks();
-    /* Atualiza badge imediatamente após carregar ataques */
-    var _bdg = document.getElementById('ap-badge');
-    if (_bdg) _bdg.textContent = attacks.length;
     refreshVillageNames(function () {
     var old = g('ap-overlay'); if (old) old.remove();
 
     var wrap = document.createElement('div');
     wrap.innerHTML = buildHTML();
     document.body.appendChild(wrap.firstElementChild);
+
+    /* Atualiza badge APÓS injetar HTML (elemento já existe no DOM) */
+    var _bdg = document.getElementById('ap-badge');
+    if (_bdg) _bdg.textContent = attacks.length;
 
     /* Listeners de recalc */
     ['ap-d-x','ap-d-y','ap-sd','ap-st','ap-ad','ap-at','ap-ws','ap-us'].forEach(function (id) {
