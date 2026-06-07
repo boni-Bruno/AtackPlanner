@@ -73,13 +73,18 @@
  * ║  v2.6.0      ║  Badge corrigido (atualiza após HTML injetar).║
  * ║  2025-06-06  ║  Botão Mapa removido. Coluna # sem quebra de  ║
  * ║              ║  linha (#001 em vez de # / 0 / 1).           ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v2.7.0      ║  Sincronização automática com bloco de notas  ║
+ * ║  2025-06-06  ║  TW (screen=memo, aba json_attack_plan).      ║
+ * ║              ║  Salvar/excluir atualiza memo automaticamente. ║
+ * ║              ║  Ao abrir, importa novos ataques do memo.     ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v2.6.0';
+  var AP_VERSION = 'v2.7.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -261,6 +266,97 @@
   function persist() {
     localStorage.setItem(STORE_KEY, JSON.stringify(attacks));
     var bdg = g('ap-badge'); if (bdg) bdg.textContent = attacks.length;
+    syncMemo();
+  }
+
+  /* ══════════════════════════════════════════════════════
+     SINCRONIZAÇÃO COM BLOCO DE NOTAS (screen=memo)
+     Salva o JSON dos ataques na aba 'json_attack_plan'
+     para acesso de qualquer dispositivo via TW.
+  ══════════════════════════════════════════════════════ */
+  function syncMemo() {
+    if (!MEMO_TAB_ID) return; /* aba ainda não localizada */
+    var villageId = GD.village && GD.village.id;
+    var h = GD.csrf;
+    if (!villageId || !h) return;
+    var json = JSON.stringify(attacks);
+    var body = 'tab_id=' + encodeURIComponent(MEMO_TAB_ID) +
+               '&memo=' + encodeURIComponent(json) +
+               '&h=' + encodeURIComponent(h);
+    fetch('/game.php?village=' + villageId + '&screen=memo&action=edit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: body
+    }).catch(function() {}); /* silencioso — não bloqueia o fluxo */
+  }
+
+  /* Busca ou cria a aba 'json_attack_plan' no memo */
+  function initMemoTab(cb) {
+    var villageId = GD.village && GD.village.id;
+    var h = GD.csrf;
+    if (!villageId || !h) { cb(); return; }
+    fetch('/game.php?village=' + villageId + '&screen=memo')
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        /* Procura aba json_attack_plan e seu tab_id */
+        /* Padrão: selectTab(NNNN); ...>json_attack_plan */
+        var tabs = html.match(/selectTab\((\d+)\)[^>]*>[^<]*json_attack_plan/g);
+        if (tabs && tabs.length) {
+          var m = tabs[0].match(/selectTab\((\d+)\)/);
+          if (m) { MEMO_TAB_ID = m[1]; cb(); return; }
+        }
+        /* Também tenta via strong (aba selecionada não tem selectTab) */
+        var sel = html.match(/<strong>[^<]*json_attack_plan[^<]*<\/strong>[\s\S]{0,300}?name="tab_id" value="(\d+)"/);
+        if (!sel) sel = html.match(/name="tab_id" value="(\d+)"[\s\S]{0,500}?json_attack_plan/);
+        if (sel) { MEMO_TAB_ID = sel[1]; cb(); return; }
+        /* Aba não existe — cria */
+        TribalWars.post('memo', {ajaxaction: 'add_tab'}, {}, function(r) {
+          if (!r || !r.id) { cb(); return; }
+          var newId = r.id;
+          TribalWars.post('memo', {ajaxaction: 'rename_tab'}, {id: newId, newTitle: 'json_attack_plan'}, function() {
+            MEMO_TAB_ID = newId;
+            cb();
+          });
+        });
+      })
+      .catch(function() { cb(); });
+  }
+
+  /* Lê JSON do memo e mescla com localStorage (importação automática) */
+  function importFromMemo(cb) {
+    if (!MEMO_TAB_ID) { cb(); return; }
+    var villageId = GD.village && GD.village.id;
+    if (!villageId) { cb(); return; }
+    fetch('/game.php?village=' + villageId + '&screen=memo')
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        /* Extrai conteúdo do textarea da aba correta */
+        var re = new RegExp('name="tab_id" value="' + MEMO_TAB_ID + '"[\\s\\S]*?<textarea[^>]*>([\\s\\S]*?)<\/textarea>');
+        var m = html.match(re);
+        if (!m || !m[1].trim()) { cb(); return; }
+        try {
+          var imported = JSON.parse(m[1].trim());
+          if (!Array.isArray(imported)) { cb(); return; }
+          var parsed = imported.map(function(a) {
+            return Object.assign({}, a, {
+              sendTime:   new Date(a.sendTime),
+              arriveTime: new Date(a.arriveTime),
+              returnTime: a.returnTime ? new Date(a.returnTime) : null,
+              createdAt:  new Date(a.createdAt)
+            });
+          });
+          /* Mescla: memo tem prioridade sobre localStorage */
+          var localIds = attacks.map(function(a) { return a.id; });
+          var news = parsed.filter(function(a) { return localIds.indexOf(a.id) === -1; });
+          if (news.length) {
+            attacks = attacks.concat(news);
+            attacks.sort(function(a,b){ return new Date(a.sendTime) - new Date(b.sendTime); });
+            localStorage.setItem(STORE_KEY, JSON.stringify(attacks));
+          }
+        } catch(e) {}
+        cb();
+      })
+      .catch(function() { cb(); });
   }
 
   /* ══════════════════════════════════════════════════════
@@ -1026,7 +1122,9 @@
   /* Busca config e substitui pelo modal completo */
   loadWorldConfig(function () {
     attacks = loadAttacks();
-    refreshVillageNames(function () {
+    initMemoTab(function () {
+      importFromMemo(function () {
+        refreshVillageNames(function () {
     var old = g('ap-overlay'); if (old) old.remove();
 
     var wrap = document.createElement('div');
@@ -1054,6 +1152,8 @@
 
     recalc();
     }); /* fim refreshVillageNames */
+      }); /* fim importFromMemo */
+    }); /* fim initMemoTab */
   });
 
 })();
