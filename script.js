@@ -526,7 +526,7 @@
               '<label class="ap-lbl">Aldeia de Origem</label>' +
               '<input type="text" class="ap-inp" id="ap-o-name" readonly style="background:#f0e8d0;color:#6b4c10;cursor:default" value="' + esc(CURRENT.name || '') + '">' +
               '<div class="ap-row">' +
-                '<input type="text" class="ap-inp" id="ap-o-x" readonly style="background:#f0e8d0;color:#6b4c10;cursor:default;width:90px;flex:none" value="' + ((CURRENT.x && CURRENT.y) ? CURRENT.x + \'|\'+ CURRENT.y : \'\') + '">' +
+                '<input type="text" class="ap-inp" id="ap-o-x" readonly style="background:#f0e8d0;color:#6b4c10;cursor:default;width:90px;flex:none" value="' + ((CURRENT.x && CURRENT.y) ? (CURRENT.x + '|' + CURRENT.y) : '') + '">' +
                 '<input type="hidden" id="ap-o-y" value="' + (CURRENT.y || '') + '">' +
                 '<button class="btn-cur" onclick="AP.cur()">📍 Atualizar</button>' +
               '</div>' +
