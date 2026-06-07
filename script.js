@@ -65,13 +65,17 @@
  * ║  v2.4.0      ║  Atualização de nomes via game_data da página ║
  * ║  2025-06-06  ║  atual + scripts inline. API get_villages     ║
  * ║              ║  removida (não suportada no TW BR).           ║
+ * ╠══════════════╬═══════════════════════════════════════════════╣
+ * ║  v2.5.0      ║  Badge atualizado ao abrir. Origem somente    ║
+ * ║  2025-06-06  ║  leitura. Campo Y removido (cola X|Y no X).  ║
+ * ║              ║  Checkbox da tabela removido.                 ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v2.4.0';
+  var AP_VERSION = 'v2.5.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -452,8 +456,6 @@
     '.ap-sel-bar{background:#e8d098;border:1px solid #c8a84b;border-radius:3px;padding:6px 10px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px}',
     '.ap-sel-bar label{display:flex;align-items:center;gap:4px;cursor:pointer;color:#5a3a00;font-weight:700}',
     '.ap-chk{width:14px;height:14px;cursor:pointer;accent-color:#8b2020}',
-    'tr.ap-row-selected td{background:#fff3cc !important}',
-    '.col-chk{width:24px;text-align:center}',
     '.ap-empty{text-align:center;padding:30px;color:#8b6914}',
     '.ap-loading{text-align:center;padding:20px;color:#8b6914;font-size:13px}',
   ].join('');
@@ -522,20 +524,19 @@
           '<div class="ap-sb g2">' +
             '<div class="ap-fld">' +
               '<label class="ap-lbl">Aldeia de Origem</label>' +
-              '<input type="text" class="ap-inp" id="ap-o-name" placeholder="Nome" value="' + esc(CURRENT.name || '') + '">' +
+              '<input type="text" class="ap-inp" id="ap-o-name" readonly style="background:#f0e8d0;color:#6b4c10;cursor:default" value="' + esc(CURRENT.name || '') + '">' +
               '<div class="ap-row">' +
-                '<input type="text" class="ap-inp" id="ap-o-x" placeholder="X ou 490|834" style="width:110px;flex:none" value="' + (CURRENT.x || '') + '" title="Cole X, Y ou coordenada no formato 490|834">' +
-                '<input type="text" class="ap-inp" id="ap-o-y" placeholder="Y" style="width:62px;flex:none" value="' + (CURRENT.y || '') + '">' +
-                '<button class="btn-map" id="ap-bmo" onclick="AP.pick(\'origin\')">🗺 Mapa</button>' +
-                '<button class="btn-cur" onclick="AP.cur()">📍 Atual</button>' +
+                '<input type="text" class="ap-inp" id="ap-o-x" readonly style="background:#f0e8d0;color:#6b4c10;cursor:default;width:90px;flex:none" value="' + ((CURRENT.x && CURRENT.y) ? CURRENT.x + \'|\'+ CURRENT.y : \'\') + '">' +
+                '<input type="hidden" id="ap-o-y" value="' + (CURRENT.y || '') + '">' +
+                '<button class="btn-cur" onclick="AP.cur()">📍 Atualizar</button>' +
               '</div>' +
             '</div>' +
             '<div class="ap-fld">' +
               '<label class="ap-lbl">Aldeia de Destino</label>' +
-              '<input type="text" class="ap-inp" id="ap-d-name" placeholder="Nome">' +
+              '<input type="text" class="ap-inp" id="ap-d-name" placeholder="Nome da aldeia (opcional)">' +
               '<div class="ap-row">' +
-                '<input type="text" class="ap-inp" id="ap-d-x" placeholder="X ou 490|834" style="width:110px;flex:none" title="Cole X, Y ou coordenada no formato 490|834">' +
-                '<input type="text" class="ap-inp" id="ap-d-y" placeholder="Y" style="width:62px;flex:none">' +
+                '<input type="text" class="ap-inp" id="ap-d-x" placeholder="Cole 490|834 aqui" style="flex:1" title="Cole a coordenada no formato 490|834">' +
+                '<input type="hidden" id="ap-d-y">' +
                 '<button class="btn-map" id="ap-bmd" onclick="AP.pick(\'dest\')">🗺 Mapa</button>' +
               '</div>' +
             '</div>' +
@@ -741,7 +742,6 @@
         badge = '<span class="bdg bdg-w">⏳ em ' + fmtDur(remSend) + '</span>';
       }
       return '<tr class="' + rowClass + '" id="ap-tr-' + a.id + '">' +
-        '<td class="col-chk"><input type="checkbox" class="ap-chk ap-row-chk" data-id="' + a.id + '"></td>' +
         '<td class="col-num" style="color:#8b6914;font-weight:700;text-align:center">' + pad(i + 1) + '</td>' +
         '<td class="col-village" style="font-weight:700">' + esc(a.origin) +
           (a.originX ? '<br><span style="font-size:9px;color:#8b6914;font-weight:normal">(' + a.originX + '|' + a.originY + ')</span>' : '') +
@@ -764,7 +764,6 @@
 
     tbl.innerHTML = '<div class="ap-tw"><table class="ap-t">' +
       '<thead><tr>' +
-        '<th class="col-chk"></th>' +
         '<th class="col-num">#</th>' +
         '<th class="col-village">Origem</th>' +
         '<th class="col-village">Destino</th>' +
@@ -833,10 +832,10 @@
         var v = window.game_data && window.game_data.village;
         if (!v) throw 0;
         g('ap-o-name').value = v.name;
-        g('ap-o-x').value = parseInt(v.x);
+        g('ap-o-x').value = parseInt(v.x) + '|' + parseInt(v.y);
         g('ap-o-y').value = parseInt(v.y);
         recalc();
-      } catch (e) { alert('Não foi possível detectar a aldeia atual. Informe manualmente.'); }
+      } catch (e) { alert('Não foi possível detectar a aldeia atual.'); }
     },
     calc: function () {
       _fromCalcBtn = true;
@@ -871,7 +870,11 @@
         var el = g(id); if (el) el.value = '';
       });
       /* Repreenche com aldeia atual */
-      if (CURRENT.x) { g('ap-o-name').value = CURRENT.name; g('ap-o-x').value = CURRENT.x; g('ap-o-y').value = CURRENT.y; }
+      if (CURRENT.x) {
+        g('ap-o-name').value = CURRENT.name;
+        g('ap-o-x').value = CURRENT.x + '|' + CURRENT.y;
+        g('ap-o-y').value = CURRENT.y;
+      }
       document.querySelectorAll('.ap-trp').forEach(function (c) { c.classList.remove('on'); });
       selTroop = null; _lastData = null;
       g('ap-res').classList.remove('on');
@@ -1060,6 +1063,9 @@
   /* Busca config e substitui pelo modal completo */
   loadWorldConfig(function () {
     attacks = loadAttacks();
+    /* Atualiza badge imediatamente após carregar ataques */
+    var _bdg = document.getElementById('ap-badge');
+    if (_bdg) _bdg.textContent = attacks.length;
     refreshVillageNames(function () {
     var old = g('ap-overlay'); if (old) old.remove();
 
@@ -1068,13 +1074,12 @@
     document.body.appendChild(wrap.firstElementChild);
 
     /* Listeners de recalc */
-    ['ap-o-x','ap-o-y','ap-d-x','ap-d-y','ap-sd','ap-st','ap-ad','ap-at','ap-ws','ap-us'].forEach(function (id) {
+    ['ap-d-x','ap-d-y','ap-sd','ap-st','ap-ad','ap-at','ap-ws','ap-us'].forEach(function (id) {
       var el = g(id);
       if (el) { el.addEventListener('input', recalc); el.addEventListener('change', recalc); }
     });
 
-    /* Paste de coordenadas no formato 490|834 */
-    bindCoordPaste('ap-o');
+    /* Paste de coordenadas no formato 490|834 — apenas destino */
     bindCoordPaste('ap-d');
 
     /* Atualiza status a cada 30s */
