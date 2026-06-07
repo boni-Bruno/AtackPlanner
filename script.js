@@ -73,18 +73,13 @@
  * ║  v2.6.0      ║  Badge corrigido (atualiza após HTML injetar).║
  * ║  2025-06-06  ║  Botão Mapa removido. Coluna # sem quebra de  ║
  * ║              ║  linha (#001 em vez de # / 0 / 1).           ║
- * ╠══════════════╬═══════════════════════════════════════════════╣
- * ║  v2.7.0      ║  Sincronização automática com bloco de notas  ║
- * ║  2025-06-06  ║  TW (screen=memo, aba json_attack_plan).      ║
- * ║              ║  Salvar/excluir atualiza memo automaticamente. ║
- * ║              ║  Ao abrir, importa novos ataques do memo.     ║
  * ╚══════════════╩═══════════════════════════════════════════════╝
  */
 
 (function () {
   'use strict';
 
-  var AP_VERSION = 'v2.7.0';
+  var AP_VERSION = 'v2.6.0';
 
   /* ── Evita duplicata: executar de novo fecha o pop-up ── */
   if (document.getElementById('ap-overlay')) {
@@ -266,116 +261,6 @@
   function persist() {
     localStorage.setItem(STORE_KEY, JSON.stringify(attacks));
     var bdg = g('ap-badge'); if (bdg) bdg.textContent = attacks.length;
-    syncMemo();
-  }
-
-  /* ══════════════════════════════════════════════════════
-     SINCRONIZAÇÃO COM BLOCO DE NOTAS (screen=memo)
-     Salva o JSON dos ataques na aba 'json_attack_plan'
-     para acesso de qualquer dispositivo via TW.
-  ══════════════════════════════════════════════════════ */
-  function syncMemo() {
-    if (!MEMO_TAB_ID) return; /* aba ainda não localizada */
-    var villageId = GD.village && GD.village.id;
-    var h = GD.csrf;
-    if (!villageId || !h) return;
-    var json = JSON.stringify(attacks);
-    var body = 'tab_id=' + encodeURIComponent(MEMO_TAB_ID) +
-               '&memo=' + encodeURIComponent(json) +
-               '&h=' + encodeURIComponent(h);
-    fetch('/game.php?village=' + villageId + '&screen=memo&action=edit', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: body
-    }).catch(function() {}); /* silencioso — não bloqueia o fluxo */
-  }
-
-  /* Busca ou cria a aba 'json_attack_plan' no memo */
-  function initMemoTab(cb) {
-    /* Usa setTimeout como safety net — garante que cb() sempre é chamado */
-    var called = false;
-    var safe = function() { if (!called) { called = true; cb(); } };
-    setTimeout(safe, 5000); /* timeout de 5s */
-
-    var villageId = GD.village && GD.village.id;
-    var h = GD.csrf;
-    if (!villageId || !h) { safe(); return; }
-
-    fetch('/game.php?village=' + villageId + '&screen=memo')
-      .then(function(r) { return r.text(); })
-      .then(function(html) {
-        /* Tenta achar tab_id da aba json_attack_plan */
-        /* Aba não selecionada: selectTab(NNN)...>json_attack_plan */
-        var m1 = html.match(/selectTab\((\d+)\)[^>]*>[^<]*json_attack_plan/);
-        if (m1) { MEMO_TAB_ID = m1[1]; safe(); return; }
-        /* Aba selecionada: aparece em <strong> sem selectTab */
-        var m2 = html.match(/name="tab_id" value="(\d+)"[\s\S]{0,800}json_attack_plan/);
-        if (!m2) m2 = html.match(/json_attack_plan[\s\S]{0,800}?name="tab_id" value="(\d+)"/);
-        if (m2) { MEMO_TAB_ID = m2[1]; safe(); return; }
-
-        /* Não achou — cria via fetch POST (não usa TribalWars.post) */
-        var bodyAdd = 'h=' + encodeURIComponent(h);
-        fetch('/game.php?village=' + villageId + '&screen=memo&ajaxaction=add_tab&h=' + h, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-          body: bodyAdd
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(r) {
-          if (!r || !r.id) { safe(); return; }
-          var newId = r.id;
-          var bodyRename = 'id=' + encodeURIComponent(newId) + '&newTitle=json_attack_plan&h=' + encodeURIComponent(h);
-          fetch('/game.php?village=' + villageId + '&screen=memo&ajaxaction=rename_tab&h=' + h, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-            body: bodyRename
-          })
-          .then(function() { MEMO_TAB_ID = newId; safe(); })
-          .catch(safe);
-        })
-        .catch(safe);
-      })
-      .catch(safe);
-  }
-
-  /* Lê JSON do memo e mescla com localStorage */
-  function importFromMemo(cb) {
-    var called = false;
-    var safe = function() { if (!called) { called = true; cb(); } };
-    setTimeout(safe, 5000);
-
-    if (!MEMO_TAB_ID) { safe(); return; }
-    var villageId = GD.village && GD.village.id;
-    if (!villageId) { safe(); return; }
-
-    fetch('/game.php?village=' + villageId + '&screen=memo')
-      .then(function(r) { return r.text(); })
-      .then(function(html) {
-        var re = new RegExp('name="tab_id" value="' + MEMO_TAB_ID + '"[\\s\\S]*?<textarea[^>]*>([\\s\\S]*?)<\/textarea>');
-        var m = html.match(re);
-        if (!m || !m[1].trim()) { safe(); return; }
-        try {
-          var imported = JSON.parse(m[1].trim());
-          if (!Array.isArray(imported)) { safe(); return; }
-          var parsed = imported.map(function(a) {
-            return Object.assign({}, a, {
-              sendTime:   new Date(a.sendTime),
-              arriveTime: new Date(a.arriveTime),
-              returnTime: a.returnTime ? new Date(a.returnTime) : null,
-              createdAt:  new Date(a.createdAt)
-            });
-          });
-          var localIds = attacks.map(function(a) { return a.id; });
-          var news = parsed.filter(function(a) { return localIds.indexOf(a.id) === -1; });
-          if (news.length) {
-            attacks = attacks.concat(news);
-            attacks.sort(function(a,b){ return new Date(a.sendTime) - new Date(b.sendTime); });
-            localStorage.setItem(STORE_KEY, JSON.stringify(attacks));
-          }
-        } catch(e) {}
-        safe();
-      })
-      .catch(safe);
   }
 
   /* ══════════════════════════════════════════════════════
@@ -1141,9 +1026,7 @@
   /* Busca config e substitui pelo modal completo */
   loadWorldConfig(function () {
     attacks = loadAttacks();
-    initMemoTab(function () {
-      importFromMemo(function () {
-        refreshVillageNames(function () {
+    refreshVillageNames(function () {
     var old = g('ap-overlay'); if (old) old.remove();
 
     var wrap = document.createElement('div');
@@ -1171,8 +1054,6 @@
 
     recalc();
     }); /* fim refreshVillageNames */
-      }); /* fim importFromMemo */
-    }); /* fim initMemoTab */
   });
 
 })();
